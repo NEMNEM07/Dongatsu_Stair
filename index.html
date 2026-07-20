@@ -464,7 +464,7 @@ DONKATSU_IMG.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAVQAAAC5CAYAAA
 ========================================================= */
 const CONFIG = {
   LEADERBOARD_URL: 'https://script.google.com/macros/s/AKfycbysXqxWB0tDa4P7Vbdvruouhk74NScrMIQy5n5Ev2rOBzZODnyJWJiAAWEyVK9p8xyakA/exec',
-  GAME_VERSION: '1.3.0' // Config 시트의 RequiredVersion과 다르면 접속 차단됨
+  GAME_VERSION: '1.3.1' // Config 시트의 RequiredVersion과 다르면 접속 차단됨
 };
 
 /* =========================================================
@@ -1342,6 +1342,11 @@ class Game{
       }
     }
 
+    // background decor (clouds → stars as you climb higher), generated ahead like the stairs
+    this.bgDecor = [];
+    this._bgFrontierY = 0;
+    this._growBgDecor(-1400);
+
     this.state='playing';
     this._lastT = performance.now();
   }
@@ -1518,6 +1523,7 @@ class Game{
 
     this.player.update(dt);
     this.stairMgr.pruneBehind(this.player.stairIndex);
+    this._growBgDecor(this.camera.y - 1400);
 
     // time decay
     const decay = TIME_DECAY_BASE + TIME_DECAY_MAX_EXTRA * (1 - Math.exp(-this.score / TIME_DECAY_HALFLIFE));
@@ -1593,6 +1599,40 @@ class Game{
 
   worldToScreen(wx, wy){
     return [this.W/2 + (wx - this.camera.x)*RENDER_SCALE, this.H*0.6 + (wy - this.camera.y)*RENDER_SCALE];
+  }
+
+  // background layer scrolls slower than the foreground for a sense of depth
+  worldToScreenPar(wx, wy){
+    const PAR = 0.5;
+    return [this.W/2 + (wx*PAR - this.camera.x*PAR)*RENDER_SCALE, this.H*0.6 + (wy*PAR - this.camera.y*PAR)*RENDER_SCALE];
+  }
+
+  // Generates clouds/stars ahead of the player as they climb. The higher the
+  // floor, the more the sky shifts from daytime clouds to a starry night —
+  // the background visibly changes the further you climb.
+  _growBgDecor(targetWorldY){
+    while(this._bgFrontierY > targetWorldY){
+      this._bgFrontierY -= 200 + Math.random()*180;
+      const floorAtBand = Math.max(0, Math.round(-this._bgFrontierY / STEP_DY));
+      const nightiness = Math.min(1, floorAtBand / 900); // fully "night" by ~floor 900
+      const count = 1 + Math.floor(Math.random()*2);
+      for(let i=0;i<count;i++){
+        const isStar = Math.random() < nightiness;
+        this.bgDecor.push({
+          type: isStar ? 'star' : 'cloud',
+          worldX: (Math.random()*2-1) * 300,
+          worldY: this._bgFrontierY + (Math.random()*160-80),
+          size: isStar ? (1.4+Math.random()*2.2) : (30+Math.random()*34),
+          phase: Math.random()*Math.PI*2,
+          alpha: isStar ? (0.35+Math.random()*0.55) : (0.09+Math.random()*0.11)
+        });
+      }
+    }
+    // keep the array bounded — drop decor far behind the camera
+    if(this.bgDecor.length > 500){
+      const keepAbove = this.camera.y + 2500;
+      this.bgDecor = this.bgDecor.filter(d => d.worldY < keepAbove);
+    }
   }
 
   _drawFace(img, x, y, r, ringColor, ringWidth){
@@ -1673,6 +1713,29 @@ class Game{
 
     ctx.fillStyle='rgba(201,162,39,0.04)';
     for(let i=0;i<6;i++) ctx.fillRect(W*0.1+i*W*0.16,0,2,H);
+
+    if(this.bgDecor){
+      const t = performance.now();
+      for(const d of this.bgDecor){
+        const [dx,dy] = this.worldToScreenPar(d.worldX, d.worldY);
+        if(dy < -80 || dy > H+80) continue;
+        if(d.type==='cloud'){
+          const g = ctx.createRadialGradient(dx,dy,0,dx,dy,d.size*RENDER_SCALE);
+          g.addColorStop(0, `rgba(236,227,201,${d.alpha})`);
+          g.addColorStop(1, 'rgba(236,227,201,0)');
+          ctx.fillStyle = g;
+          ctx.beginPath(); ctx.arc(dx,dy,d.size*RENDER_SCALE,0,Math.PI*2); ctx.fill();
+        } else {
+          const twinkle = 0.55 + 0.45*Math.sin(t*0.0025 + d.phase);
+          ctx.save();
+          ctx.globalAlpha = d.alpha * twinkle;
+          ctx.fillStyle = '#fff6d8';
+          ctx.shadowColor = '#fff6d8'; ctx.shadowBlur = 6;
+          ctx.beginPath(); ctx.arc(dx,dy,d.size*RENDER_SCALE*0.5,0,Math.PI*2); ctx.fill();
+          ctx.restore();
+        }
+      }
+    }
 
     const stairs = this.stairMgr.stairs;
     const offset = this.stairMgr.baseIndexOffset||0;
