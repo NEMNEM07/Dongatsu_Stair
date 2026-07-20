@@ -671,8 +671,8 @@ class InputManager{
     window.addEventListener('keydown', (e)=>{
       if(e.repeat) return;
       switch(e.key){
-        case 'ArrowLeft': case 'a': case 'A': this.dirQueue='L'; break;
-        case 'ArrowRight': case 'd': case 'D': this.dirQueue='R'; break;
+        case 'ArrowLeft': case 'a': case 'A': this.dirQueue='L'; this.bufferClimb(); break;
+        case 'ArrowRight': case 'd': case 'D': this.dirQueue='R'; this.bufferClimb(); break;
         case ' ': case 'w': case 'W': this.bufferClimb(); e.preventDefault(); break;
         case 'p': case 'P': this.pausePressed = true; break;
       }
@@ -886,7 +886,8 @@ class Game{
 
     $('btnReverse').addEventListener('click', ()=>{
       if(this.state!=='playing') return;
-      this.player.reverse(this.settings.soundOn?this.sound:null);
+      this.input.dirQueue = this.player.facing==='L' ? 'R' : 'L';
+      this.input.bufferClimb();
     });
     $('btnClimb').addEventListener('click', ()=>this.input.bufferClimb());
 
