@@ -417,16 +417,7 @@
     <div class="go-score" id="finalScore">0</div>
     <div class="go-record hidden" id="newRecordTag">🏆 신기록 달성!</div>
     <div class="go-best" id="finalBest">최고 기록 0</div>
-    <div class="panel hidden" id="submitPanel" style="max-width:340px;">
-      <h2>리더보드에 등록</h2>
-      <div id="submitLabel" style="font-size:12px; color:var(--brass-bright); margin-bottom:6px;"></div>
-      <div style="display:flex; gap:8px;">
-        <input type="text" id="nameInput" placeholder="이름" maxlength="10"
-          style="flex:1; background:rgba(0,0,0,0.25); border:1px solid rgba(184,172,138,0.25); color:var(--paper); border-radius:6px; padding:8px 10px; font-size:13px;">
-        <button class="btn btn-primary" id="submitScoreBtn" style="padding:8px 16px; font-size:13px;">등록</button>
-      </div>
-      <div id="submitStatus" style="font-size:11px; color:var(--paper-dim); margin-top:8px; min-height:14px;"></div>
-    </div>
+    <div id="autoSubmitStatus" style="font-size:11px; color:var(--paper-dim); margin-bottom:16px; min-height:14px;"></div>
     <div class="btn-row">
       <button class="btn btn-ghost" id="goMenuBtn">메뉴로</button>
       <button class="btn btn-primary" id="goRetryBtn">다시 오르기</button>
@@ -466,7 +457,7 @@ const RENDER_SCALE       = 1.55; // visual zoom — world logic/spacing stays th
 ========================================================= */
 const CONFIG = {
   LEADERBOARD_URL: 'https://script.google.com/macros/s/AKfycbysXqxWB0tDa4P7Vbdvruouhk74NScrMIQy5n5Ev2rOBzZODnyJWJiAAWEyVK9p8xyakA/exec',
-  GAME_VERSION: '1.0.8' // Config 시트의 RequiredVersion과 다르면 접속 차단됨
+  GAME_VERSION: '1.0.9' // Config 시트의 RequiredVersion과 다르면 접속 차단됨
 };
 
 /* =========================================================
@@ -1156,7 +1147,6 @@ class Game{
       this._stopLeaderboardPolling();
     });
 
-    $('submitScoreBtn').addEventListener('click', ()=>this.submitScore());
 
     $('toggleSound').addEventListener('click', ()=>{ this.settings.soundOn=!this.settings.soundOn; this.sound.enabled=this.settings.soundOn; this._syncSettingsUI(); this.storage.saveSettings(this.settings); });
     $('toggleVibration').addEventListener('click', ()=>{ this.settings.vibrationOn=!this.settings.vibrationOn; this._syncSettingsUI(); this.storage.saveSettings(this.settings); });
@@ -1375,27 +1365,7 @@ class Game{
       document.getElementById('newRecordTag').classList.toggle('hidden', !isRecord);
       document.getElementById('finalBest').textContent = '최고 기록 ' + this.best;
       document.getElementById('gameOverScreen').classList.remove('hidden');
-
-      const submitPanel = document.getElementById('submitPanel');
-      const nameInput = document.getElementById('nameInput');
-      const submitLabel = document.getElementById('submitLabel');
-      const submitBtn = document.getElementById('submitScoreBtn');
-      const status = document.getElementById('submitStatus');
-      if(this.leaderboard.configured){
-        submitPanel.classList.remove('hidden');
-        submitBtn.disabled = false; submitBtn.textContent = '등록';
-        status.textContent = '';
-        if(this.session && this.session.username){
-          nameInput.classList.add('hidden');
-          submitLabel.textContent = `"${this.session.username}" 이름으로 등록돼요`;
-        } else {
-          nameInput.classList.remove('hidden');
-          nameInput.value = '';
-          submitLabel.textContent = '';
-        }
-      } else {
-        submitPanel.classList.add('hidden');
-      }
+      this._autoSubmitScore();
     }, 600);
   }
 
@@ -1427,19 +1397,16 @@ class Game{
       </div>`).join('');
   }
 
-  async submitScore(){
-    const nameInput = document.getElementById('nameInput');
-    const submitBtn = document.getElementById('submitScoreBtn');
-    const status = document.getElementById('submitStatus');
-    const name = (this.session && this.session.username)
-      ? this.session.username
-      : ((nameInput.value||'').trim().slice(0,10) || '익명');
-    submitBtn.disabled = true; submitBtn.textContent = '등록 중...';
-    status.textContent = '';
-    const res = await this.leaderboard.submit(name, this.score);
+  async _autoSubmitScore(){
+    const statusEl = document.getElementById('autoSubmitStatus');
+    if(!this.leaderboard.configured || !this.session || !this.session.username){
+      if(statusEl) statusEl.textContent = '';
+      return;
+    }
+    if(statusEl) statusEl.textContent = '리더보드에 등록 중...';
+    const res = await this.leaderboard.submit(this.session.username, this.score);
     if(res && res.ok){
-      submitBtn.textContent = '등록 완료 ✓';
-      status.textContent = '리더보드에 반영됐어요.';
+      if(statusEl) statusEl.textContent = '🏆 리더보드에 등록됐어요';
       if(this.score > this.best){
         this.best = this.score;
         this.storage.saveBest(this.best);
@@ -1450,9 +1417,8 @@ class Game{
       if(!document.getElementById('leaderboardPanel').classList.contains('hidden')){
         this.refreshLeaderboard(true);
       }
-    } else {
-      submitBtn.disabled = false; submitBtn.textContent = '등록';
-      status.textContent = '등록 실패 — Apps Script URL/배포 상태를 확인해줘.';
+    } else if(statusEl){
+      statusEl.textContent = '';
     }
   }
 
