@@ -36,7 +36,7 @@
     background: radial-gradient(ellipse at 50% 0%, #163826 0%, var(--ink) 55%, var(--ink-deep) 100%);
     box-shadow: 0 0 90px rgba(0,0,0,0.65);
   }
-  canvas{ display:block; position:absolute; inset:0; }
+  canvas{ display:block; position:absolute; inset:0; width:100%; height:100%; }
 
   .screen{
     position:absolute; inset:0; z-index:20;
@@ -437,7 +437,7 @@ const RENDER_SCALE       = 1.55; // visual zoom — world logic/spacing stays th
 ========================================================= */
 const CONFIG = {
   LEADERBOARD_URL: 'https://script.google.com/macros/s/AKfycbysXqxWB0tDa4P7Vbdvruouhk74NScrMIQy5n5Ev2rOBzZODnyJWJiAAWEyVK9p8xyakA/exec',
-  GAME_VERSION: '1.0.2' // Config 시트의 RequiredVersion과 다르면 접속 차단됨
+  GAME_VERSION: '1.0.3' // Config 시트의 RequiredVersion과 다르면 접속 차단됨
 };
 
 /* =========================================================
@@ -792,6 +792,10 @@ class Game{
     this._bindUI();
     this._resize();
     window.addEventListener('resize', ()=>this._resize());
+    if(window.ResizeObserver){
+      this._ro = new ResizeObserver(()=>this._resize());
+      this._ro.observe(this.canvas);
+    }
     this._initAsync();
   }
 
