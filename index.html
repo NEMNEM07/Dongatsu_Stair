@@ -554,6 +554,7 @@ class StairManager{
   reset(){
     this.stairs = [];
     this.runLen = 1;
+    this.baseIndexOffset = 0;
     this.stairs.push({side:'L', worldY:0, worldX:0});
     this._growTo(AHEAD_BUFFER);
   }
