@@ -1,1 +1,1226 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>돈가스 계단</title>
+<style>
+  :root{
+    --ink: #0c1f16;
+    --ink-deep: #071510;
+    --brass: #c9a227;
+    --brass-bright: #e8c34a;
+    --ruby: #a83250;
+    --sapphire: #2f6f9e;
+    --emerald: #2f9e6f;
+    --paper: #ece3c9;
+    --paper-dim: #9fa992;
+    --accent: 45; /* hue, shifts every 100 floors */
+  }
+  *{box-sizing:border-box; -webkit-tap-highlight-color: transparent;}
+  html,body{
+    margin:0; padding:0; height:100%; overflow:hidden;
+    background: var(--ink-deep);
+    font-family: 'Noto Sans KR', 'Malgun Gothic', sans-serif;
+    color: var(--paper);
+    user-select:none;
+  }
+  #app{ position:relative; width:100vw; height:100vh; overflow:hidden; background: var(--ink-deep); }
+  canvas{ display:block; position:absolute; inset:0; }
 
+  .screen{
+    position:absolute; inset:0; z-index:20;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    padding: 24px; text-align:center;
+  }
+  .hidden{ display:none !important; }
+
+  .eyebrow{ letter-spacing:0.35em; font-size:11px; color:var(--brass); text-transform:uppercase; margin-bottom:6px;}
+  h1{ font-size:40px; margin:0 0 4px; color:var(--paper); letter-spacing:2px; text-shadow:0 0 18px rgba(201,162,39,0.45);}
+  h1 span{ color:var(--brass-bright); }
+  .subtitle{ color:var(--paper-dim); font-size:13px; margin:8px 0 22px; max-width:320px; line-height:1.6;}
+
+  .best-badge{
+    background: rgba(201,162,39,0.12); border:1px solid rgba(201,162,39,0.4);
+    border-radius:10px; padding:8px 18px; font-size:13px; color:var(--brass-bright); margin-bottom:20px;
+  }
+  .best-badge b{ font-size:18px; margin-left:6px; }
+
+  .btn{
+    padding:14px 30px; border-radius:12px; border:none; cursor:pointer;
+    font-size:15px; font-weight:700; letter-spacing:0.05em;
+    box-shadow:0 6px 18px rgba(0,0,0,0.35);
+  }
+  .btn-primary{ background:linear-gradient(180deg,var(--brass-bright),var(--brass)); color:var(--ink-deep); }
+  .btn-ghost{ background:rgba(201,162,39,0.1); border:1px solid rgba(201,162,39,0.4); color:var(--paper); }
+  .btn-row{ display:flex; gap:10px; margin-top:14px; flex-wrap:wrap; justify-content:center; }
+
+  .controls-card{
+    background: rgba(15,35,25,0.6); border:1px solid rgba(201,162,39,0.25);
+    border-radius:12px; padding:14px 18px; margin-bottom:18px; max-width:340px;
+    font-size:12px; color:var(--paper-dim); line-height:1.9; text-align:left;
+  }
+  .controls-card b{ color:var(--brass-bright); }
+
+  .link-btn{
+    background:none; border:none; color:var(--paper-dim); font-size:12px;
+    text-decoration:underline; cursor:pointer; margin-top:14px;
+  }
+
+  /* Customize panel */
+  #customizePanel{ overflow-y:auto; justify-content:flex-start; padding-top:40px; }
+  .panel{
+    background: linear-gradient(180deg, rgba(20,44,32,0.9), rgba(9,24,17,0.9));
+    border:1px solid rgba(201,162,39,0.35); border-radius:14px; padding:16px;
+    width:100%; max-width:420px; margin-bottom:14px; text-align:left;
+  }
+  .panel h2{ font-size:12px; letter-spacing:0.12em; text-transform:uppercase; color:var(--brass); margin:0 0 10px; }
+  .face-row{ display:flex; align-items:center; gap:12px; padding:7px 0; border-bottom:1px solid rgba(184,172,138,0.12); }
+  .face-row:last-child{ border-bottom:none; }
+  .thumb{
+    width:46px; height:46px; border-radius:50%; flex-shrink:0; overflow:hidden;
+    background: radial-gradient(circle at 35% 30%, #2c5240, #10261a);
+    border:2px solid var(--emerald); display:flex; align-items:center; justify-content:center; font-size:18px;
+  }
+  .thumb.player{ border-color:var(--brass); }
+  .thumb img{ width:100%; height:100%; object-fit:cover; }
+  .face-fields{ flex:1; display:flex; flex-direction:column; gap:5px; min-width:0; }
+  .face-fields input[type=text]{
+    background:rgba(0,0,0,0.25); border:1px solid rgba(184,172,138,0.25); color:var(--paper);
+    border-radius:6px; padding:5px 8px; font-size:12px; width:100%;
+  }
+  .upload-btn{
+    display:inline-flex; align-items:center; gap:6px; font-size:10px; color:var(--brass-bright);
+    background:rgba(201,162,39,0.12); border:1px solid rgba(201,162,39,0.4); border-radius:6px;
+    padding:4px 9px; cursor:pointer; width:fit-content;
+  }
+  .upload-btn input{ display:none; }
+
+  /* Settings panel */
+  .setting-row{
+    display:flex; align-items:center; justify-content:space-between; padding:9px 0;
+    border-bottom:1px solid rgba(184,172,138,0.12); font-size:13px;
+  }
+  .setting-row:last-child{ border-bottom:none; }
+  .toggle{
+    width:44px; height:24px; border-radius:12px; background:rgba(255,255,255,0.1);
+    position:relative; cursor:pointer; border:1px solid rgba(201,162,39,0.3);
+  }
+  .toggle.on{ background:rgba(201,162,39,0.5); }
+  .toggle::after{
+    content:''; position:absolute; top:2px; left:2px; width:18px; height:18px; border-radius:50%;
+    background:var(--paper); transition:left 0.15s ease;
+  }
+  .toggle.on::after{ left:22px; background:var(--brass-bright); }
+
+  /* HUD */
+  #hud{
+    position:absolute; top:0; left:0; right:0; z-index:10; padding:14px 16px;
+    display:flex; flex-direction:column; gap:8px; pointer-events:none;
+  }
+  .hud-top{ display:flex; justify-content:space-between; align-items:flex-start; }
+  .hud-card{
+    background:rgba(7,21,16,0.55); border:1px solid rgba(201,162,39,0.3); border-radius:10px;
+    padding:6px 12px; backdrop-filter:blur(3px);
+  }
+  .hud-label{ font-size:9px; letter-spacing:0.14em; color:var(--brass); text-transform:uppercase;}
+  .hud-value{ font-size:20px; font-weight:700; color:var(--paper); line-height:1.1;}
+  #fpsCard{ font-size:10px; color:var(--paper-dim); }
+  .time-gauge-wrap{
+    background:rgba(7,21,16,0.55); border:1px solid rgba(201,162,39,0.3); border-radius:10px;
+    padding:6px 10px; backdrop-filter:blur(3px);
+  }
+  .time-gauge-track{ width:100%; height:8px; border-radius:4px; background:rgba(255,255,255,0.08); overflow:hidden; margin-top:4px;}
+  .time-gauge-fill{ height:100%; background:linear-gradient(90deg,var(--emerald),var(--brass-bright)); width:100%; transition:width 0.08s linear; }
+  .dir-indicator{
+    position:absolute; top:14px; left:50%; transform:translateX(-50%);
+    background:rgba(7,21,16,0.55); border:1px solid rgba(201,162,39,0.3); border-radius:10px;
+    width:40px; height:40px; display:flex; align-items:center; justify-content:center;
+    font-size:20px; color:var(--brass-bright); pointer-events:none;
+  }
+  #hudIcons{ position:absolute; top:14px; right:14px; display:flex; gap:6px; pointer-events:all; z-index:11; }
+  .icon-btn{
+    width:34px; height:34px; border-radius:9px; background:rgba(7,21,16,0.55);
+    border:1px solid rgba(201,162,39,0.3); color:var(--paper); font-size:15px; cursor:pointer;
+    display:flex; align-items:center; justify-content:center;
+  }
+
+  /* Controls (touch) */
+  #controls{
+    position:absolute; bottom:0; left:0; right:0; z-index:10;
+    display:flex; justify-content:space-between; align-items:flex-end;
+    padding:0 16px 20px; pointer-events:none;
+  }
+  .corner-btn{
+    pointer-events:all; width:84px; height:84px; border-radius:26px;
+    display:flex; flex-direction:column; align-items:center; justify-content:center;
+    box-shadow:0 6px 16px rgba(0,0,0,0.45), inset 0 2px 0 rgba(255,255,255,0.08);
+    border:2px solid rgba(201,162,39,0.5);
+  }
+  .corner-btn:active{ transform:scale(0.93); }
+  .corner-btn .icon{ font-size:30px; line-height:1; }
+  .corner-btn .lbl{ font-size:9px; letter-spacing:0.08em; margin-top:3px; opacity:0.85; }
+  .reverse-btn{
+    background:radial-gradient(circle at 35% 28%, rgba(47,111,158,0.45), rgba(12,31,22,0.85));
+    color:#8fc4e8;
+  }
+  .climb-btn{
+    background:radial-gradient(circle at 35% 28%, rgba(201,162,39,0.5), rgba(12,31,22,0.85));
+    color:var(--brass-bright);
+  }
+
+  /* Combo floating text container handled by canvas */
+
+  /* Pause overlay */
+  #pauseOverlay{
+    position:absolute; inset:0; z-index:25; background:rgba(4,10,7,0.82);
+    display:flex; flex-direction:column; align-items:center; justify-content:center; gap:14px;
+  }
+
+  /* Game over */
+  #gameOverScreen{ z-index:30; background:rgba(4,10,7,0.85); }
+  .go-title{ font-size:14px; letter-spacing:0.3em; color:var(--ruby); text-transform:uppercase; margin-bottom:4px;}
+  .go-score{ font-size:56px; font-weight:800; color:var(--brass-bright); text-shadow:0 0 20px rgba(201,162,39,0.5); }
+  .go-record{ font-size:13px; color:var(--emerald); margin-top:6px; font-weight:700; }
+  .go-best{ font-size:12px; color:var(--paper-dim); margin-top:4px; margin-bottom:20px;}
+
+  .lb-list{ display:flex; flex-direction:column; gap:0; max-height:44vh; overflow-y:auto; }
+  .lb-row{
+    display:flex; align-items:center; gap:10px; padding:8px 4px;
+    border-bottom:1px solid rgba(184,172,138,0.12); font-size:13px;
+  }
+  .lb-row:last-child{ border-bottom:none; }
+  .lb-rank{ width:26px; text-align:center; font-weight:800; color:var(--brass-bright); flex-shrink:0; }
+  .lb-row:nth-child(1) .lb-rank{ color:#ffd76a; }
+  .lb-row:nth-child(2) .lb-rank{ color:#d8d8d8; }
+  .lb-row:nth-child(3) .lb-rank{ color:#d99a5b; }
+  .lb-name{ flex:1; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .lb-score{ font-weight:700; color:var(--paper); }
+  .lb-empty{ padding:20px 0; color:var(--paper-dim); font-size:13px; text-align:center; }
+
+  ::-webkit-scrollbar{ width:6px; }
+  ::-webkit-scrollbar-thumb{ background:rgba(201,162,39,0.4); border-radius:3px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <canvas id="game"></canvas>
+
+  <!-- START SCREEN -->
+  <div class="screen" id="startScreen">
+    <div class="eyebrow">Endless Ascent</div>
+    <h1>돈가스 <span>계단</span></h1>
+    <div class="subtitle">방향을 정하고, 타이밍 맞춰 올라가라.<br>틀린 방향이면 추락, 시간이 다하면 게임오버.</div>
+    <div class="best-badge">최고 기록 <b id="bestBadge">0</b>층</div>
+    <div class="controls-card">
+      <b>PC</b> — ←/→(A/D) 방향 전환 · Space/W 오르기 · P 일시정지<br>
+      <b>모바일</b> — 왼쪽 아래 버튼으로 방향 반전, 오른쪽 아래 버튼으로 오르기
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="startBtn">START ▲</button>
+      <button class="btn btn-ghost" id="leaderboardBtn">🏆 리더보드</button>
+      <button class="btn btn-ghost" id="customizeBtn">🎨 커스터마이즈</button>
+      <button class="btn btn-ghost" id="settingsBtn">⚙ 설정</button>
+    </div>
+  </div>
+
+  <!-- LEADERBOARD SCREEN -->
+  <div class="screen hidden" id="leaderboardPanel">
+    <h1 style="font-size:22px;">🏆 리더보드</h1>
+    <div class="panel" style="max-width:380px;">
+      <div id="lbList" class="lb-list">
+        <div class="lb-empty">불러오는 중...</div>
+      </div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" id="lbRefreshBtn">새로고침</button>
+      <button class="btn btn-primary" id="lbDoneBtn">완료</button>
+    </div>
+  </div>
+
+  <!-- CUSTOMIZE SCREEN -->
+  <div class="screen hidden" id="customizePanel">
+    <h1 style="font-size:22px;">커스터마이즈</h1>
+    <div class="subtitle" style="margin:6px 0 16px;">얼굴 사진은 브라우저 메모리에만 저장돼 (새로고침하면 초기화)</div>
+    <div class="panel">
+      <h2>내 얼굴</h2>
+      <div class="face-row">
+        <div class="thumb player" id="thumb-player">🧗</div>
+        <div class="face-fields">
+          <label class="upload-btn">📷 사진 올리기<input type="file" accept="image/*" id="file-player"></label>
+          <span style="font-size:10px;color:var(--paper-dim);">비워두면 기본 도형 캐릭터 사용</span>
+        </div>
+      </div>
+    </div>
+    <div class="panel">
+      <h2>친구들 (관중석 등장, 최대 5명)</h2>
+      <div id="friendRows"></div>
+    </div>
+    <button class="btn btn-primary" id="customizeDoneBtn">완료</button>
+  </div>
+
+  <!-- SETTINGS SCREEN -->
+  <div class="screen hidden" id="settingsPanel">
+    <h1 style="font-size:22px;">설정</h1>
+    <div class="panel" style="margin-top:10px;">
+      <div class="setting-row"><span>효과음</span><div class="toggle" id="toggleSound"></div></div>
+      <div class="setting-row"><span>진동</span><div class="toggle" id="toggleVibration"></div></div>
+      <div class="setting-row"><span>FPS 표시</span><div class="toggle" id="toggleFps"></div></div>
+    </div>
+    <button class="btn btn-primary" id="settingsDoneBtn">완료</button>
+  </div>
+
+  <!-- HUD -->
+  <div id="hud" class="hidden">
+    <div class="hud-top">
+      <div class="hud-card">
+        <div class="hud-label">층수</div>
+        <div class="hud-value" id="scoreVal">0</div>
+      </div>
+      <div class="hud-card">
+        <div class="hud-label">최고</div>
+        <div class="hud-value" id="bestVal">0</div>
+      </div>
+    </div>
+    <div class="time-gauge-wrap">
+      <div style="display:flex; justify-content:space-between;">
+        <span class="hud-label">시간</span>
+        <span class="hud-label" id="fpsCard"></span>
+      </div>
+      <div class="time-gauge-track"><div class="time-gauge-fill" id="timeFill"></div></div>
+    </div>
+  </div>
+  <div class="dir-indicator hidden" id="dirIndicator">▲</div>
+  <div id="hudIcons" class="hidden">
+    <button class="icon-btn" id="pauseBtn">⏸</button>
+    <button class="icon-btn" id="screenshotBtn">📷</button>
+    <button class="icon-btn" id="fullscreenBtn">⛶</button>
+  </div>
+
+  <div id="controls" class="hidden">
+    <button class="corner-btn reverse-btn" id="btnReverse"><span class="icon">🔄</span><span class="lbl">방향</span></button>
+    <button class="corner-btn climb-btn" id="btnClimb"><span class="icon">▲</span><span class="lbl">오르기</span></button>
+  </div>
+
+  <!-- PAUSE -->
+  <div id="pauseOverlay" class="hidden">
+    <h1 style="font-size:26px;">일시정지</h1>
+    <div class="btn-row">
+      <button class="btn btn-primary" id="resumeBtn">계속하기</button>
+      <button class="btn btn-ghost" id="pauseMenuBtn">메뉴로</button>
+    </div>
+  </div>
+
+  <!-- GAME OVER -->
+  <div class="screen hidden" id="gameOverScreen">
+    <div class="go-title" id="deathReason">추락</div>
+    <div class="go-score" id="finalScore">0</div>
+    <div class="go-record hidden" id="newRecordTag">🏆 신기록 달성!</div>
+    <div class="go-best" id="finalBest">최고 기록 0</div>
+    <div class="panel hidden" id="submitPanel" style="max-width:340px;">
+      <h2>리더보드에 등록</h2>
+      <div style="display:flex; gap:8px;">
+        <input type="text" id="nameInput" placeholder="이름" maxlength="10"
+          style="flex:1; background:rgba(0,0,0,0.25); border:1px solid rgba(184,172,138,0.25); color:var(--paper); border-radius:6px; padding:8px 10px; font-size:13px;">
+        <button class="btn btn-primary" id="submitScoreBtn" style="padding:8px 16px; font-size:13px;">등록</button>
+      </div>
+      <div id="submitStatus" style="font-size:11px; color:var(--paper-dim); margin-top:8px; min-height:14px;"></div>
+    </div>
+    <div class="btn-row">
+      <button class="btn btn-ghost" id="goMenuBtn">메뉴로</button>
+      <button class="btn btn-primary" id="goRetryBtn">다시 오르기</button>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+"use strict";
+
+/* =========================================================
+   CONSTANTS
+========================================================= */
+const STEP_DY            = 46;    // world px risen per stair (vertical)
+const STEP_DX            = 34;    // world px drifted per stair (horizontal, diagonal staircase)
+const CLIMB_ANIM_MS      = 150;
+const TURN_ANIM_MS       = 90;
+const MAX_SAME_DIRECTION = 6;     // longer flights between corners
+const AHEAD_BUFFER       = 16;    // stairs generated ahead of player
+const PRUNE_BEHIND       = 5;     // stairs kept behind player before removal
+const INPUT_BUFFER_MS    = 150;   // climb input buffer window
+const TIME_START         = 8.0;   // seconds
+const TIME_MAX           = 8.0;
+const TIME_DECAY_BASE    = 1.0;
+const TIME_DECAY_PER_SCORE = 0.012;
+const TIME_GAIN_PER_STEP = 1.15;
+const COMBO_WINDOW_MS    = 1000;
+const PARTICLE_POOL_SIZE = 80;
+const COLOR_CYCLE_FLOORS = 100;
+const RENDER_SCALE       = 1.55; // visual zoom — world logic/spacing stays the same, everything just draws bigger
+
+/* =========================================================
+   CONFIG — paste your deployed Apps Script Web App URL here
+   (Extensions > Apps Script > 배포 > 새 배포 > 웹 앱, 액세스: 모든 사용자)
+========================================================= */
+const CONFIG = {
+  LEADERBOARD_URL: 'PASTE_YOUR_APPS_SCRIPT_WEB_APP_URL_HERE'
+};
+
+/* =========================================================
+   STORAGE  (persistent artifact storage — not localStorage)
+========================================================= */
+class StorageManager{
+  constructor(){
+    this.defaults = { soundOn:true, vibrationOn:true, showFps:false };
+  }
+  async loadBest(){
+    try{
+      const r = await window.storage.get('infstairs_best', false);
+      return r ? (parseInt(r.value,10)||0) : 0;
+    }catch(e){ return 0; }
+  }
+  async saveBest(v){
+    try{ await window.storage.set('infstairs_best', String(v), false); }catch(e){}
+  }
+  async loadSettings(){
+    try{
+      const r = await window.storage.get('infstairs_settings', false);
+      return r ? Object.assign({}, this.defaults, JSON.parse(r.value)) : Object.assign({}, this.defaults);
+    }catch(e){ return Object.assign({}, this.defaults); }
+  }
+  async saveSettings(s){
+    try{ await window.storage.set('infstairs_settings', JSON.stringify(s), false); }catch(e){}
+  }
+  async loadName(){
+    try{
+      const r = await window.storage.get('infstairs_name', false);
+      return r ? r.value : '';
+    }catch(e){ return ''; }
+  }
+  async saveName(name){
+    try{ await window.storage.set('infstairs_name', name, false); }catch(e){}
+  }
+}
+
+/* =========================================================
+   LEADERBOARD  (Google Apps Script + Sheets backend)
+========================================================= */
+class Leaderboard{
+  constructor(url){ this.url = url; }
+  get configured(){ return !!(this.url && this.url.indexOf('PASTE_YOUR') === -1); }
+  async fetchTop(n){
+    if(!this.configured) return { ok:false, error:'not_configured' };
+    try{
+      const res = await fetch(`${this.url}?action=list&n=${n||20}`);
+      return await res.json();
+    }catch(e){ return { ok:false, error:String(e) }; }
+  }
+  async submit(name, score){
+    if(!this.configured) return { ok:false, error:'not_configured' };
+    try{
+      // text/plain avoids a CORS preflight against the Apps Script web app
+      const res = await fetch(this.url, {
+        method:'POST',
+        headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+        body: JSON.stringify({ name, score })
+      });
+      return await res.json();
+    }catch(e){ return { ok:false, error:String(e) }; }
+  }
+}
+
+/* =========================================================
+   SOUND  (WebAudio synthesized — no external files)
+========================================================= */
+class SoundManager{
+  constructor(){
+    this.ctx = null;
+    this.enabled = true;
+  }
+  ensureCtx(){
+    if(!this.ctx){
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if(AC) this.ctx = new AC();
+    }
+    if(this.ctx && this.ctx.state === 'suspended') this.ctx.resume();
+  }
+  tone(freq, dur, type, vol, delay){
+    if(!this.enabled) return;
+    this.ensureCtx();
+    if(!this.ctx) return;
+    const t0 = this.ctx.currentTime + (delay||0);
+    const osc = this.ctx.createOscillator();
+    const gain = this.ctx.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.setValueAtTime(freq, t0);
+    gain.gain.setValueAtTime(0, t0);
+    gain.gain.linearRampToValueAtTime(vol||0.15, t0+0.012);
+    gain.gain.exponentialRampToValueAtTime(0.001, t0+dur);
+    osc.connect(gain); gain.connect(this.ctx.destination);
+    osc.start(t0); osc.stop(t0+dur+0.02);
+  }
+  turn(){ this.tone(520, 0.05, 'square', 0.06); }
+  climb(){ this.tone(660, 0.09, 'sine', 0.14); this.tone(880, 0.08, 'sine', 0.08, 0.03); }
+  milestone(){ this.tone(880,0.12,'sine',0.16); this.tone(1180,0.16,'sine',0.14,0.06); }
+  fail(){ this.tone(220,0.22,'sawtooth',0.16); this.tone(140,0.3,'sawtooth',0.14,0.08); }
+}
+
+/* =========================================================
+   PARTICLE POOL
+========================================================= */
+class ParticlePool{
+  constructor(size){
+    this.pool = new Array(size).fill(null).map(()=>({active:false,x:0,worldY:0,vx:0,vy:0,life:0,kind:'dust'}));
+  }
+  spawn(x, worldY, vx, vy, life, kind){
+    for(const p of this.pool){
+      if(!p.active){
+        p.active=true; p.x=x; p.worldY=worldY; p.vx=vx; p.vy=vy; p.life=life; p.maxLife=life; p.kind=kind;
+        return p;
+      }
+    }
+    return null; // pool exhausted, skip
+  }
+  dust(x, worldY){
+    for(let i=0;i<5;i++){
+      this.spawn(x, worldY, (Math.random()-0.5)*70, -Math.random()*40-8, 0.5,'dust');
+    }
+  }
+  burst(x, worldY){
+    for(let i=0;i<16;i++){
+      this.spawn(x, worldY, (Math.random()-0.5)*150, -Math.random()*170-40, 0.85,'burst');
+    }
+  }
+  update(dt){
+    for(const p of this.pool){
+      if(!p.active) continue;
+      p.worldY += p.vy*dt; p.x += p.vx*dt; p.vy += 240*dt; p.life -= dt;
+      if(p.life<=0) p.active=false;
+    }
+  }
+  forEachActive(fn){ for(const p of this.pool) if(p.active) fn(p); }
+}
+
+/* =========================================================
+   STAIR MANAGER
+========================================================= */
+class StairManager{
+  // Stairs form a continuous diagonal switchback staircase (like real stairs):
+  // each step drifts worldX by +-STEP_DX and rises by STEP_DY. A run of steps
+  // sharing the same "side" forms one diagonal flight; when the side flips,
+  // the staircase turns a corner — just like a real switchback stairwell.
+  constructor(){ this.reset(); }
+  reset(){
+    this.stairs = [];
+    this.runLen = 1;
+    this.stairs.push({side:'L', worldY:0, worldX:0});
+    this._growTo(AHEAD_BUFFER);
+  }
+  otherSide(s){ return s==='L' ? 'R' : 'L'; }
+  _genNext(){
+    const last = this.stairs[this.stairs.length-1];
+    let side;
+    if(this.runLen >= MAX_SAME_DIRECTION){
+      side = this.otherSide(last.side); // force switch — no overly long straight run
+    } else {
+      side = Math.random() < 0.78 ? last.side : this.otherSide(last.side);
+    }
+    if(side === last.side) this.runLen++; else this.runLen = 1;
+    const s = {
+      side,
+      worldY: last.worldY - STEP_DY,
+      worldX: last.worldX + (side==='L' ? -STEP_DX : STEP_DX)
+    };
+    this.stairs.push(s);
+    return s;
+  }
+  _growTo(minCountAbsolute){
+    // minCountAbsolute is an absolute stair index target; account for stairs
+    // already dropped from the front (baseIndexOffset) when comparing.
+    while((this.baseIndexOffset||0) + this.stairs.length < minCountAbsolute) this._genNext();
+  }
+  ensureAhead(playerIndex){ this._growTo(playerIndex + AHEAD_BUFFER); }
+  pruneBehind(playerIndex){
+    const offset = this.baseIndexOffset||0;
+    const desiredOffset = playerIndex - PRUNE_BEHIND;
+    if(desiredOffset > offset){
+      const cut = Math.min(desiredOffset - offset, this.stairs.length);
+      if(cut > 0){
+        this.stairs.splice(0, cut);
+        this.baseIndexOffset = offset + cut;
+        return cut;
+      }
+    }
+    return 0;
+  }
+  get(i){ return this.stairs[i - (this.baseIndexOffset||0)]; }
+}
+
+/* =========================================================
+   CAMERA
+========================================================= */
+class Camera{
+  constructor(){ this.x = 0; this.y = 0; this.followSpeed = 6; }
+  reset(x, y){ this.x = x; this.y = y; }
+  update(dt, targetX, targetY, score){
+    this.followSpeed = 6 + Math.min(score*0.04, 8); // camera speed increases with difficulty
+    const k = Math.min(1, dt*this.followSpeed);
+    this.x += (targetX - this.x) * k;
+    this.y += (targetY - this.y) * k;
+  }
+}
+
+/* =========================================================
+   PLAYER
+========================================================= */
+class Player{
+  constructor(){ this.reset(); }
+  reset(){
+    this.stairIndex = 0;
+    this.facing = 'L';
+    this.anim = { active:false, t:1, fromX:0, toX:0, fromY:0, toY:0 };
+    this.state = 'idle'; // idle | turning | climbing | falling
+    this.turnT = 1;
+    this.walkPhase = 0;
+  }
+  turn(dir, sound){
+    if(this.facing === dir) return;
+    this.facing = dir;
+    this.turnT = 0;
+    this.state = 'turning';
+    if(sound) sound.turn();
+  }
+  reverse(sound){
+    this.turn(this.facing==='L' ? 'R' : 'L', sound);
+  }
+  startClimb(fromStair, toStair, animSpeedMul){
+    this.anim = {
+      active:true, t:0,
+      fromX: fromStair.worldX, toX: toStair.worldX,
+      fromY: fromStair.worldY, toY: toStair.worldY
+    };
+    this.state = 'climbing';
+    this._animSpeedMul = animSpeedMul || 1;
+  }
+  update(dt){
+    this.walkPhase += dt*6;
+    if(this.turnT < 1) this.turnT = Math.min(1, this.turnT + dt/(TURN_ANIM_MS/1000));
+    if(this.anim.active){
+      this.anim.t = Math.min(1, this.anim.t + dt/((CLIMB_ANIM_MS/1000)/(this._animSpeedMul||1)));
+      if(this.anim.t >= 1){
+        this.anim.active = false;
+        this.stairIndex++;
+        this.state = 'idle';
+      }
+    }
+  }
+}
+
+/* =========================================================
+   INPUT MANAGER
+========================================================= */
+class InputManager{
+  constructor(){
+    this.pendingClimbUntil = 0;
+    this.dirQueue = null; // 'L' | 'R' | null
+    this._bindKeyboard();
+  }
+  _bindKeyboard(){
+    window.addEventListener('keydown', (e)=>{
+      if(e.repeat) return;
+      switch(e.key){
+        case 'ArrowLeft': case 'a': case 'A': this.dirQueue='L'; break;
+        case 'ArrowRight': case 'd': case 'D': this.dirQueue='R'; break;
+        case ' ': case 'w': case 'W': this.bufferClimb(); e.preventDefault(); break;
+        case 'p': case 'P': this.pausePressed = true; break;
+      }
+    });
+  }
+  bufferClimb(){ this.pendingClimbUntil = performance.now() + INPUT_BUFFER_MS; }
+  consumeClimb(){
+    if(performance.now() < this.pendingClimbUntil){
+      this.pendingClimbUntil = 0;
+      return true;
+    }
+    return false;
+  }
+  consumeDir(){ const d = this.dirQueue; this.dirQueue=null; return d; }
+  consumePause(){ const p = this.pausePressed; this.pausePressed=false; return p; }
+}
+
+/* =========================================================
+   MAIN GAME
+========================================================= */
+class Game{
+  constructor(){
+    this.canvas = document.getElementById('game');
+    this.ctx = this.canvas.getContext('2d');
+    this.storage = new StorageManager();
+    this.sound = new SoundManager();
+    this.particles = new ParticlePool(PARTICLE_POOL_SIZE);
+    this.stairMgr = new StairManager();
+    this.camera = new Camera();
+    this.player = new Player();
+    this.input = new InputManager();
+    this.leaderboard = new Leaderboard(CONFIG.LEADERBOARD_URL);
+    this.playerName = '';
+
+    this.state = 'menu'; // menu | playing | paused | gameover
+    this.score = 0;
+    this.best = 0;
+    this.settings = { soundOn:true, vibrationOn:true, showFps:false };
+    this.timeLeft = TIME_START;
+    this.combo = 0;
+    this.lastClimbAt = 0;
+    this.floatTexts = [];
+    this.shake = 0;
+    this.deathType = null;
+
+    this.fps = 60;
+    this._fpsAcc = 0; this._fpsFrames = 0; this._fpsLast = 0;
+
+    this.faces = { player: null };
+    this.friends = [];
+
+    this._bindUI();
+    this._resize();
+    window.addEventListener('resize', ()=>this._resize());
+    this._initAsync();
+  }
+
+  async _initAsync(){
+    this.best = await this.storage.loadBest();
+    this.settings = await this.storage.loadSettings();
+    this.playerName = await this.storage.loadName();
+    this.sound.enabled = this.settings.soundOn;
+    this._syncSettingsUI();
+    document.getElementById('bestBadge').textContent = this.best;
+    requestAnimationFrame((t)=>this._loop(t));
+  }
+
+  _resize(){
+    this.DPR = Math.min(window.devicePixelRatio||1, 2);
+    this.W = window.innerWidth; this.H = window.innerHeight;
+    this.canvas.width = this.W*this.DPR; this.canvas.height = this.H*this.DPR;
+    this.canvas.style.width = this.W+'px'; this.canvas.style.height = this.H+'px';
+    this.ctx.setTransform(this.DPR,0,0,this.DPR,0,0);
+  }
+
+  _syncSettingsUI(){
+    document.getElementById('toggleSound').classList.toggle('on', this.settings.soundOn);
+    document.getElementById('toggleVibration').classList.toggle('on', this.settings.vibrationOn);
+    document.getElementById('toggleFps').classList.toggle('on', this.settings.showFps);
+  }
+
+  _bindUI(){
+    const $ = (id)=>document.getElementById(id);
+
+    $('startBtn').addEventListener('click', ()=>this.startGame());
+    $('customizeBtn').addEventListener('click', ()=>{ $('startScreen').classList.add('hidden'); $('customizePanel').classList.remove('hidden'); });
+    $('customizeDoneBtn').addEventListener('click', ()=>{ $('customizePanel').classList.add('hidden'); $('startScreen').classList.remove('hidden'); });
+    $('settingsBtn').addEventListener('click', ()=>{ $('startScreen').classList.add('hidden'); $('settingsPanel').classList.remove('hidden'); });
+    $('settingsDoneBtn').addEventListener('click', ()=>{ $('settingsPanel').classList.add('hidden'); $('startScreen').classList.remove('hidden'); });
+
+    $('leaderboardBtn').addEventListener('click', ()=>{
+      $('startScreen').classList.add('hidden');
+      $('leaderboardPanel').classList.remove('hidden');
+      this.refreshLeaderboard();
+    });
+    $('lbRefreshBtn').addEventListener('click', ()=>this.refreshLeaderboard());
+    $('lbDoneBtn').addEventListener('click', ()=>{ $('leaderboardPanel').classList.add('hidden'); $('startScreen').classList.remove('hidden'); });
+
+    $('submitScoreBtn').addEventListener('click', ()=>this.submitScore());
+
+    $('toggleSound').addEventListener('click', ()=>{ this.settings.soundOn=!this.settings.soundOn; this.sound.enabled=this.settings.soundOn; this._syncSettingsUI(); this.storage.saveSettings(this.settings); });
+    $('toggleVibration').addEventListener('click', ()=>{ this.settings.vibrationOn=!this.settings.vibrationOn; this._syncSettingsUI(); this.storage.saveSettings(this.settings); });
+    $('toggleFps').addEventListener('click', ()=>{ this.settings.showFps=!this.settings.showFps; this._syncSettingsUI(); this.storage.saveSettings(this.settings); });
+
+    $('btnReverse').addEventListener('click', ()=>{
+      if(this.state!=='playing') return;
+      this.player.reverse(this.settings.soundOn?this.sound:null);
+    });
+    $('btnClimb').addEventListener('click', ()=>this.input.bufferClimb());
+
+    $('pauseBtn').addEventListener('click', ()=>this.togglePause());
+    $('resumeBtn').addEventListener('click', ()=>this.togglePause());
+    $('pauseMenuBtn').addEventListener('click', ()=>this.goToMenu());
+    $('screenshotBtn').addEventListener('click', ()=>this.takeScreenshot());
+    $('fullscreenBtn').addEventListener('click', ()=>this.toggleFullscreen());
+
+    $('goRetryBtn').addEventListener('click', ()=>this.startGame());
+    $('goMenuBtn').addEventListener('click', ()=>this.goToMenu());
+
+    // face uploads
+    $('file-player').addEventListener('change', (e)=>{
+      const f=e.target.files[0]; if(!f) return;
+      const reader=new FileReader();
+      reader.onload=(ev)=>{
+        const img=new Image();
+        img.onload=()=>{ const t=$('thumb-player'); t.innerHTML=''; t.appendChild(img.cloneNode()); this.faces.player=img; };
+        img.src=ev.target.result;
+      };
+      reader.readAsDataURL(f);
+    });
+    const MAX_FRIENDS=5;
+    const rows = $('friendRows');
+    for(let i=0;i<MAX_FRIENDS;i++){
+      const row=document.createElement('div');
+      row.className='face-row';
+      row.innerHTML = `
+        <div class="thumb" id="thumb-f${i}">👤</div>
+        <div class="face-fields">
+          <input type="text" placeholder="이름 (선택)" id="name-f${i}">
+          <label class="upload-btn">📷 사진 올리기<input type="file" accept="image/*" id="file-f${i}"></label>
+        </div>`;
+      rows.appendChild(row);
+      const fi=row.querySelector(`#file-f${i}`), th=row.querySelector(`#thumb-f${i}`), ni=row.querySelector(`#name-f${i}`);
+      fi.addEventListener('change',(e)=>{
+        const f=e.target.files[0]; if(!f) return;
+        const reader=new FileReader();
+        reader.onload=(ev)=>{
+          const img=new Image();
+          img.onload=()=>{ th.innerHTML=''; th.appendChild(img.cloneNode()); this.friends[i]={img,name:ni.value||`친구${i+1}`}; };
+          img.src=ev.target.result;
+        };
+        reader.readAsDataURL(f);
+      });
+      ni.addEventListener('input',()=>{ if(this.friends[i]) this.friends[i].name = ni.value||`친구${i+1}`; });
+    }
+
+    // pointer/touch shortcuts on canvas: left-half=turn dir, doesn't replace explicit buttons
+    this.canvas.addEventListener('pointerdown', (e)=>{
+      if(this.state!=='playing') return;
+      // ignore if touch originated on a control button (handled separately)
+    });
+  }
+
+  goToMenu(){
+    document.getElementById('pauseOverlay').classList.add('hidden');
+    document.getElementById('gameOverScreen').classList.add('hidden');
+    document.getElementById('hud').classList.add('hidden');
+    document.getElementById('hudIcons').classList.add('hidden');
+    document.getElementById('dirIndicator').classList.add('hidden');
+    document.getElementById('controls').classList.add('hidden');
+    document.getElementById('startScreen').classList.remove('hidden');
+    document.getElementById('bestBadge').textContent = this.best;
+    this.state='menu';
+  }
+
+  startGame(){
+    document.getElementById('startScreen').classList.add('hidden');
+    document.getElementById('customizePanel').classList.add('hidden');
+    document.getElementById('settingsPanel').classList.add('hidden');
+    document.getElementById('gameOverScreen').classList.add('hidden');
+    document.getElementById('pauseOverlay').classList.add('hidden');
+    document.getElementById('hud').classList.remove('hidden');
+    document.getElementById('hudIcons').classList.remove('hidden');
+    document.getElementById('dirIndicator').classList.remove('hidden');
+    document.getElementById('controls').classList.remove('hidden');
+
+    this.stairMgr.reset();
+    this.player.reset();
+    this.camera.reset(this.stairMgr.get(0).worldX, this.stairMgr.get(0).worldY);
+    this.score = 0;
+    this.timeLeft = TIME_START;
+    this.combo = 0;
+    this.lastClimbAt = 0;
+    this.floatTexts = [];
+    this.shake = 0;
+    this.deathType = null;
+    this.player.facing = this.stairMgr.get(1).side;
+
+    // spectators from friend photos — perched just off to the side of the real staircase
+    this.spectators = [];
+    const available = this.friends.filter(f=>f);
+    if(available.length){
+      this.stairMgr.ensureAhead(60);
+      for(let i=2;i<60;i+=3){
+        if(Math.random()<0.5){
+          const f = available[Math.floor(Math.random()*available.length)];
+          const st = this.stairMgr.get(i);
+          if(!st) continue;
+          const perp = (st.side==='L' ? -1 : 1) * (78 + Math.random()*20);
+          this.spectators.push({
+            img:f.img, name:f.name,
+            worldY: st.worldY + (Math.random()*20-10),
+            worldX: st.worldX + perp,
+            bob: Math.random()*Math.PI*2
+          });
+        }
+      }
+    }
+
+    this.state='playing';
+    this._lastT = performance.now();
+  }
+
+  togglePause(){
+    if(this.state==='playing'){ this.state='paused'; document.getElementById('pauseOverlay').classList.remove('hidden'); }
+    else if(this.state==='paused'){ this.state='playing'; document.getElementById('pauseOverlay').classList.add('hidden'); this._lastT=performance.now(); }
+  }
+
+  toggleFullscreen(){
+    if(!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{});
+    else document.exitFullscreen().catch(()=>{});
+  }
+
+  takeScreenshot(){
+    try{
+      const url = this.canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = url; a.download = `donkkas-stairs-${this.score}.png`;
+      a.click();
+    }catch(e){}
+  }
+
+  attemptClimb(){
+    const cur = this.stairMgr.get(this.player.stairIndex);
+    const next = this.stairMgr.get(this.player.stairIndex+1);
+    if(!next) return;
+    if(this.player.facing === next.side){
+      const speedMul = 1 + Math.min(this.score*0.01, 0.9); // climb anim speeds up with difficulty
+      this.player.startClimb(cur, next, speedMul);
+      this.score = this.player.stairIndex+1;
+      this.stairMgr.ensureAhead(this.player.stairIndex+1);
+
+      // time management
+      this.timeLeft = Math.min(TIME_MAX, this.timeLeft + TIME_GAIN_PER_STEP);
+
+      // combo
+      const now = performance.now();
+      if(now - this.lastClimbAt < COMBO_WINDOW_MS) this.combo++; else this.combo = 1;
+      this.lastClimbAt = now;
+      if(this.combo>0 && this.combo%5===0){
+        this.floatTexts.push({text:`${this.combo} COMBO!`, worldY: next.worldY, worldX: next.worldX, life:1.1, vy:-40});
+        this.sound.enabled = this.settings.soundOn;
+        this.sound.milestone();
+      } else {
+        this.sound.enabled = this.settings.soundOn;
+        this.sound.climb();
+      }
+      if(this.score % COLOR_CYCLE_FLOORS === 0){
+        this.floatTexts.push({text:`${this.score}층 돌파!`, worldY: next.worldY, worldX: next.worldX, life:1.4, vy:-30});
+      }
+      this.particles.dust(next.worldX, next.worldY);
+    } else {
+      this.killPlayer('fall');
+    }
+  }
+
+  killPlayer(type){
+    if(this.state!=='playing') return;
+    this.deathType = type;
+    this.state = 'gameover_pending';
+    this.shake = 14;
+    this.sound.enabled = this.settings.soundOn;
+    this.sound.fail();
+    if(this.settings.vibrationOn && navigator.vibrate) navigator.vibrate(type==='fall'?[40,30,60]:[80]);
+    const cur = this.stairMgr.get(this.player.stairIndex);
+    this.particles.burst(cur.worldX, cur.worldY);
+
+    const isRecord = this.score > this.best;
+    if(isRecord){ this.best = this.score; this.storage.saveBest(this.best); }
+
+    setTimeout(()=>{
+      this.state='gameover';
+      document.getElementById('hud').classList.add('hidden');
+      document.getElementById('hudIcons').classList.add('hidden');
+      document.getElementById('dirIndicator').classList.add('hidden');
+      document.getElementById('controls').classList.add('hidden');
+      document.getElementById('deathReason').textContent = type==='fall' ? '방향 실패로 추락' : '시간 초과';
+      document.getElementById('finalScore').textContent = this.score;
+      document.getElementById('newRecordTag').classList.toggle('hidden', !isRecord);
+      document.getElementById('finalBest').textContent = '최고 기록 ' + this.best;
+      document.getElementById('gameOverScreen').classList.remove('hidden');
+
+      const submitPanel = document.getElementById('submitPanel');
+      const nameInput = document.getElementById('nameInput');
+      const submitBtn = document.getElementById('submitScoreBtn');
+      const status = document.getElementById('submitStatus');
+      if(this.leaderboard.configured){
+        submitPanel.classList.remove('hidden');
+        nameInput.value = this.playerName || '';
+        submitBtn.disabled = false; submitBtn.textContent = '등록';
+        status.textContent = '';
+      } else {
+        submitPanel.classList.add('hidden');
+      }
+    }, 600);
+  }
+
+  async refreshLeaderboard(){
+    const list = document.getElementById('lbList');
+    if(!this.leaderboard.configured){
+      list.innerHTML = '<div class="lb-empty">Apps Script URL이 아직 설정되지 않았어요.</div>';
+      return;
+    }
+    list.innerHTML = '<div class="lb-empty">불러오는 중...</div>';
+    const data = await this.leaderboard.fetchTop(20);
+    if(!data || !data.ok || !data.leaderboard || !data.leaderboard.length){
+      list.innerHTML = '<div class="lb-empty">기록이 없거나 불러오지 못했어요.</div>';
+      return;
+    }
+    list.innerHTML = data.leaderboard.map(r=>`
+      <div class="lb-row">
+        <div class="lb-rank">${r.rank}</div>
+        <div class="lb-name">${escapeHtml_(r.name)}</div>
+        <div class="lb-score">${r.score}층</div>
+      </div>`).join('');
+  }
+
+  async submitScore(){
+    const nameInput = document.getElementById('nameInput');
+    const submitBtn = document.getElementById('submitScoreBtn');
+    const status = document.getElementById('submitStatus');
+    const name = (nameInput.value||'').trim().slice(0,10) || '익명';
+    this.playerName = name;
+    this.storage.saveName(name);
+    submitBtn.disabled = true; submitBtn.textContent = '등록 중...';
+    status.textContent = '';
+    const res = await this.leaderboard.submit(name, this.score);
+    if(res && res.ok){
+      submitBtn.textContent = '등록 완료 ✓';
+      status.textContent = '리더보드에 반영됐어요.';
+    } else {
+      submitBtn.disabled = false; submitBtn.textContent = '등록';
+      status.textContent = '등록 실패 — Apps Script URL/배포 상태를 확인해줘.';
+    }
+  }
+
+  _update(dt){
+    if(this.input.consumePause()) this.togglePause();
+    if(this.state!=='playing') return;
+
+    const dir = this.input.consumeDir();
+    if(dir) this.player.turn(dir, this.settings.soundOn?this.sound:null);
+
+    if(!this.player.anim.active && this.input.consumeClimb()){
+      this.attemptClimb();
+    }
+
+    this.player.update(dt);
+    this.stairMgr.pruneBehind(this.player.stairIndex);
+
+    // time decay
+    const decay = TIME_DECAY_BASE + this.score*TIME_DECAY_PER_SCORE;
+    this.timeLeft -= decay*dt;
+    if(this.timeLeft <= 0){
+      this.timeLeft = 0;
+      this.killPlayer('timeout');
+    }
+
+    // camera
+    let targetX, targetY;
+    if(this.player.anim.active){
+      const et = easeOutCubic(this.player.anim.t);
+      targetX = lerp(this.player.anim.fromX, this.player.anim.toX, et);
+      targetY = lerp(this.player.anim.fromY, this.player.anim.toY, et);
+    } else {
+      const st = this.stairMgr.get(this.player.stairIndex);
+      targetX = st.worldX; targetY = st.worldY;
+    }
+    this.camera.update(dt, targetX, targetY, this.score);
+
+    if(this.shake>0) this.shake = Math.max(0, this.shake - dt*40);
+
+    this.particles.update(dt);
+    this.floatTexts.forEach(f=>{ f.worldY += f.vy*dt; f.life -= dt*0.9; });
+    this.floatTexts = this.floatTexts.filter(f=>f.life>0);
+
+    // HUD DOM updates
+    document.getElementById('scoreVal').textContent = this.score;
+    document.getElementById('bestVal').textContent = Math.max(this.best, this.score);
+    document.getElementById('timeFill').style.width = Math.max(0,(this.timeLeft/TIME_MAX*100)) + '%';
+    document.getElementById('dirIndicator').textContent = this.player.facing==='L' ? '◀' : '▶';
+    document.getElementById('fpsCard').textContent = this.settings.showFps ? ('FPS ' + Math.round(this.fps)) : '';
+  }
+
+  _loop(now){
+    const dt = Math.min((now - (this._lastT||now))/1000, 0.05);
+    this._lastT = now;
+
+    // fps calc
+    this._fpsAcc += dt; this._fpsFrames++;
+    if(this._fpsAcc >= 0.4){ this.fps = this._fpsFrames/this._fpsAcc; this._fpsAcc=0; this._fpsFrames=0; }
+
+    if(this.state==='playing' || this.state==='gameover_pending'){
+      this._update(dt);
+    }
+    if(this.state!=='menu'){
+      this._render();
+    }
+    requestAnimationFrame((t)=>this._loop(t));
+  }
+
+  worldToScreen(wx, wy){
+    return [this.W/2 + (wx - this.camera.x)*RENDER_SCALE, this.H*0.6 + (wy - this.camera.y)*RENDER_SCALE];
+  }
+
+  _drawFace(img, x, y, r, ringColor, ringWidth){
+    const ctx=this.ctx;
+    ctx.save(); ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.closePath(); ctx.clip();
+    if(img){
+      const s = Math.max((r*2)/img.width,(r*2)/img.height);
+      const iw=img.width*s, ih=img.height*s;
+      ctx.drawImage(img, x-iw/2, y-ih/2, iw, ih);
+    } else {
+      ctx.fillStyle='#f0e6c8'; ctx.fillRect(x-r,y-r,r*2,r*2);
+      ctx.fillStyle='#173523';
+      ctx.beginPath(); ctx.arc(x-r*0.35,y-r*0.1,r*0.11,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x+r*0.35,y-r*0.1,r*0.11,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.arc(x,y+r*0.25,r*0.4,0.15*Math.PI,0.85*Math.PI); ctx.stroke();
+    }
+    ctx.restore();
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.lineWidth=ringWidth||3; ctx.strokeStyle=ringColor; ctx.stroke();
+  }
+
+  _themeHue(){ return (45 + Math.floor(this.score/COLOR_CYCLE_FLOORS)*47) % 360; }
+
+  _drawStep(sx, sy, isNext, isPast, hue){
+    const ctx=this.ctx, w=66*RENDER_SCALE, h=16*RENDER_SCALE, depth=14*RENDER_SCALE;
+    ctx.save(); ctx.translate(sx,sy);
+    ctx.fillStyle = isPast ? 'rgba(40,70,52,0.5)' : '#173523';
+    ctx.fillRect(-w/2, 6*RENDER_SCALE, w, depth);
+    const grad = ctx.createLinearGradient(-w/2,0,w/2,0);
+    if(isNext){ grad.addColorStop(0, `hsl(${hue},85%,68%)`); grad.addColorStop(1, `hsl(${hue},70%,48%)`); }
+    else if(isPast){ grad.addColorStop(0,'rgba(60,100,76,0.5)'); grad.addColorStop(1,'rgba(40,80,58,0.5)'); }
+    else { grad.addColorStop(0,'#2f6f9e'); grad.addColorStop(1,'#20496b'); }
+    ctx.fillStyle=grad;
+    ctx.beginPath();
+    if(ctx.roundRect) ctx.roundRect(-w/2,-h/2,w,h,4*RENDER_SCALE); else ctx.rect(-w/2,-h/2,w,h);
+    ctx.fill();
+    if(isNext){
+      ctx.strokeStyle=`hsla(${hue},90%,70%,0.9)`; ctx.lineWidth=2*RENDER_SCALE; ctx.stroke();
+      ctx.shadowColor=`hsl(${hue},90%,60%)`; ctx.shadowBlur=14; ctx.stroke(); ctx.shadowBlur=0;
+    }
+    ctx.restore();
+  }
+
+  _render(){
+    const ctx=this.ctx, W=this.W, H=this.H;
+    ctx.clearRect(0,0,W,H);
+
+    const hue = this._themeHue();
+    // background wash
+    const bgGrad = ctx.createRadialGradient(W/2,0,H*0.1,W/2,H*0.5,H*0.9);
+    bgGrad.addColorStop(0, `hsla(${(hue+140)%360},35%,18%,1)`);
+    bgGrad.addColorStop(0.55, '#0c1f16');
+    bgGrad.addColorStop(1, '#071510');
+    ctx.fillStyle = bgGrad; ctx.fillRect(0,0,W,H);
+
+    const shakeX = this.shake ? (Math.random()-0.5)*this.shake : 0;
+    const shakeY = this.shake ? (Math.random()-0.5)*this.shake : 0;
+    ctx.save(); ctx.translate(shakeX, shakeY);
+
+    ctx.fillStyle='rgba(201,162,39,0.04)';
+    for(let i=0;i<6;i++) ctx.fillRect(W*0.1+i*W*0.16,0,2,H);
+
+    const stairs = this.stairMgr.stairs;
+    const offset = this.stairMgr.baseIndexOffset||0;
+    const visStartAbs = Math.max(offset, this.player.stairIndex-2);
+    const visEndAbs = Math.min(offset+stairs.length-1, this.player.stairIndex+AHEAD_BUFFER);
+    for(let i=visStartAbs;i<=visEndAbs;i++){
+      const st = this.stairMgr.get(i);
+      if(!st) continue;
+      const [sx,sy] = this.worldToScreen(st.worldX, st.worldY);
+      if(sy<-60||sy>H+60) continue;
+      this._drawStep(sx, sy, i===this.player.stairIndex+1, i<this.player.stairIndex, hue);
+    }
+
+    if(this.spectators){
+      this.spectators.forEach(sp=>{
+        const [sx,sy]=this.worldToScreen(sp.worldX, sp.worldY + Math.sin(sp.bob+performance.now()/500)*3);
+        if(sy<-80||sy>H+80) return;
+        this._drawFace(sp.img, sx, sy, 19*RENDER_SCALE, 'rgba(47,158,111,0.75)', 1.5);
+      });
+    }
+
+    this.particles.forEachActive(p=>{
+      const [sx,sy]=this.worldToScreen(p.x,p.worldY);
+      ctx.globalAlpha=Math.max(0,p.life/p.maxLife);
+      ctx.fillStyle = p.kind==='burst' ? `hsl(${hue},85%,65%)` : '#b8ac8a';
+      ctx.beginPath(); ctx.arc(sx,sy,(p.kind==='burst'?4:2.5)*RENDER_SCALE,0,Math.PI*2); ctx.fill();
+      ctx.globalAlpha=1;
+    });
+
+    this.floatTexts.forEach(f=>{
+      const [sx,sy]=this.worldToScreen(f.worldX, f.worldY);
+      ctx.globalAlpha=Math.max(0,f.life);
+      ctx.font=`bold ${Math.round(18*RENDER_SCALE*0.85)}px sans-serif`; ctx.textAlign='center';
+      ctx.fillStyle=`hsl(${hue},90%,70%)`;
+      ctx.fillText(f.text, sx, sy);
+      ctx.globalAlpha=1;
+    });
+
+    // player
+    if(this.state==='playing' || this.state==='paused' || (this.state==='gameover_pending' && this.deathType==='timeout')){
+      const cur = this.stairMgr.get(this.player.stairIndex);
+      let px, py;
+      if(this.player.anim.active){
+        const t = easeOutCubic(this.player.anim.t);
+        px = lerp(this.player.anim.fromX, this.player.anim.toX, t);
+        py = lerp(this.player.anim.fromY, this.player.anim.toY, t) - Math.sin(t*Math.PI)*24;
+      } else {
+        px = cur.worldX; py = cur.worldY;
+        px += Math.sin(this.player.walkPhase)*1.5; // idle bob
+      }
+      const [sx,sy]=this.worldToScreen(px,py);
+      const faceHue = hue;
+      const dir = this.player.facing==='L' ? -1 : 1;
+      const stride = this.player.anim.active ? Math.sin(this.player.anim.t*Math.PI) : Math.sin(this.player.walkPhase*2)*0.5;
+      const S = RENDER_SCALE;
+      const headR = 15*S*1.35; // extra boost on top of general scale — face reads clearly
+
+      const hipY = sy - 3*S;
+      const shoulderY = sy - 21*S;
+      const headY = sy - 21*S - headR*1.55;
+
+      ctx.lineCap = 'round';
+
+      // back leg + front leg (swing)
+      ctx.strokeStyle = `hsl(${faceHue},22%,28%)`;
+      ctx.lineWidth = 7*S;
+      ctx.beginPath(); ctx.moveTo(sx-3*S, hipY); ctx.lineTo(sx-3*S - dir*stride*7*S, sy-1); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(sx+3*S, hipY); ctx.lineTo(sx+3*S + dir*stride*7*S, sy-1); ctx.stroke();
+      // small feet
+      ctx.fillStyle = `hsl(${faceHue},22%,22%)`;
+      ctx.beginPath(); ctx.ellipse(sx-3*S - dir*stride*7*S, sy-1, 4*S, 2.4*S, 0,0,Math.PI*2); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(sx+3*S + dir*stride*7*S, sy-1, 4*S, 2.4*S, 0,0,Math.PI*2); ctx.fill();
+
+      // torso (capsule)
+      ctx.strokeStyle = `hsl(${faceHue},75%,52%)`;
+      ctx.lineWidth = 17*S;
+      ctx.beginPath(); ctx.moveTo(sx, hipY); ctx.lineTo(sx + dir*2*S, shoulderY); ctx.stroke();
+
+      // back arm + front arm (opposite swing to legs)
+      ctx.strokeStyle = `hsl(${faceHue},68%,44%)`;
+      ctx.lineWidth = 6*S;
+      ctx.beginPath(); ctx.moveTo(sx-7*S, shoulderY+3*S); ctx.lineTo(sx-7*S + dir*stride*6*S, shoulderY+17*S); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(sx+7*S, shoulderY+3*S); ctx.lineTo(sx+7*S - dir*stride*6*S, shoulderY+17*S); ctx.stroke();
+
+      // head — sized up extra so uploaded faces read clearly
+      this._drawFace(this.faces.player, sx + dir*2*S, headY, headR, `hsl(${faceHue},80%,62%)`, 1.8);
+    } else if(this.state==='gameover_pending' && this.deathType==='fall'){
+      // player falling — handled purely by burst particles for now
+    }
+
+    ctx.restore();
+
+    const vg = ctx.createRadialGradient(W/2,H*0.5,H*0.2, W/2,H*0.5,H*0.75);
+    vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,0.45)');
+    ctx.fillStyle=vg; ctx.fillRect(0,0,W,H);
+  }
+}
+
+function lerp(a,b,t){ return a+(b-a)*t; }
+function easeOutCubic(t){ return 1-Math.pow(1-t,3); }
+function escapeHtml_(s){
+  return String(s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+window.addEventListener('load', ()=>{ new Game(); });
+
+})();
+</script>
+</body>
+</html>
