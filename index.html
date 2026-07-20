@@ -385,12 +385,12 @@
 ========================================================= */
 const STEP_DY            = 46;    // world px risen per stair (vertical)
 const STEP_DX            = 34;    // world px drifted per stair (horizontal, diagonal staircase)
-const CLIMB_ANIM_MS      = 150;
+const CLIMB_ANIM_MS      = 110;
 const TURN_ANIM_MS       = 90;
 const MAX_SAME_DIRECTION = 6;     // longer flights between corners
 const AHEAD_BUFFER       = 16;    // stairs generated ahead of player
 const PRUNE_BEHIND       = 5;     // stairs kept behind player before removal
-const INPUT_BUFFER_MS    = 150;   // climb input buffer window
+const INPUT_BUFFER_MS    = 100;   // climb input buffer window
 const TIME_START         = 8.0;   // seconds
 const TIME_MAX           = 8.0;
 const TIME_DECAY_BASE    = 1.0;
@@ -665,6 +665,14 @@ class Player{
     };
     this.state = 'climbing';
     this._animSpeedMul = animSpeedMul || 1;
+  }
+  finishAnimNow(){
+    if(this.anim.active){
+      this.anim.active = false;
+      this.anim.t = 1;
+      this.stairIndex++;
+      this.state = 'idle';
+    }
   }
   update(dt){
     this.walkPhase += dt*6;
@@ -1228,7 +1236,8 @@ class Game{
     const dir = this.input.consumeDir();
     if(dir) this.player.turn(dir, this.settings.soundOn?this.sound:null);
 
-    if(!this.player.anim.active && this.input.consumeClimb()){
+    if(this.input.consumeClimb()){
+      if(this.player.anim.active) this.player.finishAnimNow();
       this.attemptClimb();
     }
 
@@ -1280,10 +1289,32 @@ class Game{
     if(this.state==='playing' || this.state==='gameover_pending'){
       this._update(dt);
     }
-    if(this.state!=='menu'){
+    if(this.state==='menu'){
+      this._renderMenuBackground(now);
+    } else {
       this._render();
     }
     requestAnimationFrame((t)=>this._loop(t));
+  }
+
+  _renderMenuBackground(now){
+    const ctx=this.ctx, W=this.W, H=this.H;
+    ctx.clearRect(0,0,W,H);
+    // slow ambient hue drift so the menu doesn't feel static, but stays clean —
+    // no stairs/player/particles left over from a previous run
+    const hue = (45 + (now*0.002)) % 360;
+    const bgGrad = ctx.createRadialGradient(W/2,0,H*0.1,W/2,H*0.5,H*0.9);
+    bgGrad.addColorStop(0, `hsla(${(hue+140)%360},32%,17%,1)`);
+    bgGrad.addColorStop(0.55, '#0c1f16');
+    bgGrad.addColorStop(1, '#071510');
+    ctx.fillStyle = bgGrad; ctx.fillRect(0,0,W,H);
+
+    ctx.fillStyle='rgba(201,162,39,0.035)';
+    for(let i=0;i<6;i++) ctx.fillRect(W*0.1+i*W*0.16,0,2,H);
+
+    const vg = ctx.createRadialGradient(W/2,H*0.5,H*0.2, W/2,H*0.5,H*0.75);
+    vg.addColorStop(0,'rgba(0,0,0,0)'); vg.addColorStop(1,'rgba(0,0,0,0.45)');
+    ctx.fillStyle=vg; ctx.fillRect(0,0,W,H);
   }
 
   worldToScreen(wx, wy){
