@@ -444,7 +444,6 @@ const MAX_SAME_DIRECTION = 6;     // longer flights between corners
 const AHEAD_BUFFER       = 16;    // stairs generated ahead of player
 const PRUNE_BEHIND       = 5;     // stairs kept behind player before removal
 const INPUT_BUFFER_MS    = 100;   // climb input buffer window
-const DONGTA_WINDOW_MS   = 70;    // "동타" — two climb presses this close together count as a double-step
 const TIME_START         = 8.0;   // seconds
 const TIME_MAX           = 8.0;
 const TIME_DECAY_BASE    = 1.0;
@@ -466,7 +465,7 @@ DONKATSU_IMG.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAVQAAAC5CAYAAA
 ========================================================= */
 const CONFIG = {
   LEADERBOARD_URL: 'https://script.google.com/macros/s/AKfycbysXqxWB0tDa4P7Vbdvruouhk74NScrMIQy5n5Ev2rOBzZODnyJWJiAAWEyVK9p8xyakA/exec',
-  GAME_VERSION: '1.1.0' // Config 시트의 RequiredVersion과 다르면 접속 차단됨
+  GAME_VERSION: '1.1.1' // Config 시트의 RequiredVersion과 다르면 접속 차단됨
 };
 
 /* =========================================================
@@ -600,7 +599,6 @@ class SoundManager{
   }
   turn(){ this.tone(520, 0.05, 'square', 0.06); }
   climb(){ this.tone(660, 0.09, 'sine', 0.14); this.tone(880, 0.08, 'sine', 0.08, 0.03); }
-  dongta(){ this.tone(740,0.05,'square',0.13); this.tone(1040,0.07,'square',0.11,0.045); }
   milestone(){ this.tone(880,0.12,'sine',0.16); this.tone(1180,0.16,'sine',0.14,0.06); }
   fail(){ this.tone(220,0.22,'sawtooth',0.16); this.tone(140,0.3,'sawtooth',0.14,0.08); }
 }
@@ -788,23 +786,13 @@ class InputManager{
     });
   }
   consumeReverse(){ const r = this.reversePending; this.reversePending = false; return r; }
-  bufferClimb(){
-    const now = performance.now();
-    if(this._lastClimbPressAt && (now - this._lastClimbPressAt) <= DONGTA_WINDOW_MS){
-      this._dongtaPending = true; // 동타 — two fingers landed almost simultaneously
-    }
-    this._lastClimbPressAt = now;
-    this.pendingClimbUntil = now + INPUT_BUFFER_MS;
-  }
+  bufferClimb(){ this.pendingClimbUntil = performance.now() + INPUT_BUFFER_MS; }
   consumeClimb(){
-    // returns 0 (nothing to do), 1 (normal step), or 2 (동타 double-step)
     if(performance.now() < this.pendingClimbUntil){
       this.pendingClimbUntil = 0;
-      const steps = this._dongtaPending ? 2 : 1;
-      this._dongtaPending = false;
-      return steps;
+      return true;
     }
-    return 0;
+    return false;
   }
   consumeDir(){ const d = this.dirQueue; this.dirQueue=null; return d; }
   consumePause(){ const p = this.pausePressed; this.pausePressed=false; return p; }
@@ -1383,15 +1371,6 @@ class Game{
     // if someone else already holds it, stay quiet — no need to rub it in
   }
 
-  _triggerDongtaFeedback(){
-    const st = this.stairMgr.get(this.player.stairIndex);
-    if(st){
-      this.floatTexts.push({ text:'동타! ⚡', worldY: st.worldY, worldX: st.worldX, life:0.9, vy:-55 });
-    }
-    this.sound.enabled = this.settings.soundOn;
-    this.sound.dongta();
-  }
-
   killPlayer(type){
     if(this.state!=='playing') return;
     this.deathType = type;
@@ -1502,15 +1481,9 @@ class Game{
     const dir = this.input.consumeDir();
     if(dir) this.player.turn(dir, this.settings.soundOn?this.sound:null);
 
-    const climbSteps = this.input.consumeClimb();
-    if(climbSteps > 0){
+    if(this.input.consumeClimb()){
       if(this.player.anim.active) this.player.finishAnimNow();
       this.attemptClimb();
-      if(climbSteps === 2 && this.state === 'playing'){
-        if(this.player.anim.active) this.player.finishAnimNow();
-        this.attemptClimb();
-        this._triggerDongtaFeedback();
-      }
     }
 
     this.player.update(dt);
