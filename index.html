@@ -210,8 +210,22 @@
 <div id="app">
   <canvas id="game"></canvas>
 
+  <!-- GATE SCREEN (version/maintenance check, shown briefly on load) -->
+  <div class="screen" id="gateScreen">
+    <div class="eyebrow">Endless Ascent</div>
+    <h1>돈가스 <span>계단</span></h1>
+    <div class="subtitle">불러오는 중...</div>
+  </div>
+
+  <!-- BLOCK SCREEN (maintenance mode / outdated version) -->
+  <div class="screen hidden" id="blockScreen">
+    <div class="eyebrow" id="blockEyebrow">Notice</div>
+    <h1 id="blockTitle">점검 중이에요</h1>
+    <div class="subtitle" id="blockMessage"></div>
+  </div>
+
   <!-- AUTH SCREEN (shown first) -->
-  <div class="screen" id="authScreen">
+  <div class="screen hidden" id="authScreen">
     <div class="eyebrow">Endless Ascent</div>
     <h1>돈가스 <span>계단</span></h1>
     <div class="subtitle">계정으로 로그인하면 리더보드에 기록이 남아</div>
@@ -392,7 +406,8 @@ const RENDER_SCALE       = 1.55; // visual zoom — world logic/spacing stays th
    (Extensions > Apps Script > 배포 > 새 배포 > 웹 앱, 액세스: 모든 사용자)
 ========================================================= */
 const CONFIG = {
-  LEADERBOARD_URL: 'https://script.google.com/macros/s/AKfycbysXqxWB0tDa4P7Vbdvruouhk74NScrMIQy5n5Ev2rOBzZODnyJWJiAAWEyVK9p8xyakA/exec'
+  LEADERBOARD_URL: 'https://script.google.com/macros/s/AKfycbysXqxWB0tDa4P7Vbdvruouhk74NScrMIQy5n5Ev2rOBzZODnyJWJiAAWEyVK9p8xyakA/exec',
+  GAME_VERSION: '1.0.0' // Config 시트의 RequiredVersion과 다르면 접속 차단됨
 };
 
 /* =========================================================
@@ -456,6 +471,13 @@ class Leaderboard{
     if(!this.configured) return { ok:false, error:'not_configured' };
     try{
       const res = await fetch(`${this.url}?action=list&n=${n||20}`);
+      return await res.json();
+    }catch(e){ return { ok:false, error:String(e) }; }
+  }
+  async checkStatus(){
+    if(!this.configured) return { ok:false, error:'not_configured' };
+    try{
+      const res = await fetch(`${this.url}?action=status`);
       return await res.json();
     }catch(e){ return { ok:false, error:String(e) }; }
   }
@@ -740,6 +762,11 @@ class Game{
     document.getElementById('bestBadge').textContent = this.best;
     this.setAuthMode('login');
 
+    requestAnimationFrame((t)=>this._loop(t));
+
+    const blocked = await this._checkGate();
+    if(blocked) return;
+
     this.session = await this.storage.loadSession();
     if(this.session && this.session.username){
       this.playerName = this.session.username;
@@ -749,8 +776,49 @@ class Game{
     } else {
       document.getElementById('authScreen').classList.remove('hidden');
     }
+  }
 
-    requestAnimationFrame((t)=>this._loop(t));
+  async _checkGate(){
+    const gate = document.getElementById('gateScreen');
+    const block = document.getElementById('blockScreen');
+
+    if(!this.leaderboard.configured){
+      // no backend wired up yet — don't lock the game during setup/testing
+      gate.classList.add('hidden');
+      return false;
+    }
+
+    const res = await this.leaderboard.checkStatus();
+
+    if(!res || !res.ok){
+      // backend unreachable — fail open rather than hard-locking everyone out
+      // (learned this the hard way during the GitHub Actions outage)
+      gate.classList.add('hidden');
+      return false;
+    }
+
+    if(res.maintenance){
+      gate.classList.add('hidden');
+      document.getElementById('blockEyebrow').textContent = 'Maintenance';
+      document.getElementById('blockTitle').textContent = '점검 중이에요';
+      document.getElementById('blockMessage').textContent =
+        res.message || '더 좋은 모습으로 곧 돌아올게요. 잠시 후 다시 접속해줘.';
+      block.classList.remove('hidden');
+      return true;
+    }
+
+    if(res.requiredVersion && res.requiredVersion !== CONFIG.GAME_VERSION){
+      gate.classList.add('hidden');
+      document.getElementById('blockEyebrow').textContent = 'Update Required';
+      document.getElementById('blockTitle').textContent = '업데이트가 필요해요';
+      document.getElementById('blockMessage').textContent =
+        `새 버전(${res.requiredVersion})이 있어. 페이지를 새로고침(강력 새로고침: Ctrl+Shift+R)해줘. 현재 버전: ${CONFIG.GAME_VERSION}`;
+      block.classList.remove('hidden');
+      return true;
+    }
+
+    gate.classList.add('hidden');
+    return false;
   }
 
   _refreshAuthUI(){
