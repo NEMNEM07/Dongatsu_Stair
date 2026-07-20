@@ -179,6 +179,7 @@
   }
   .corner-btn{
     pointer-events:all;
+    touch-action:manipulation;
     width:calc(clamp(84px,11vw,150px) * var(--btn-scale,1));
     height:calc(clamp(84px,11vw,150px) * var(--btn-scale,1));
     border-radius:22%;
@@ -465,7 +466,7 @@ const RENDER_SCALE       = 1.55; // visual zoom — world logic/spacing stays th
 ========================================================= */
 const CONFIG = {
   LEADERBOARD_URL: 'https://script.google.com/macros/s/AKfycbysXqxWB0tDa4P7Vbdvruouhk74NScrMIQy5n5Ev2rOBzZODnyJWJiAAWEyVK9p8xyakA/exec',
-  GAME_VERSION: '1.0.7' // Config 시트의 RequiredVersion과 다르면 접속 차단됨
+  GAME_VERSION: '1.0.8' // Config 시트의 RequiredVersion과 다르면 접속 차단됨
 };
 
 /* =========================================================
@@ -1187,12 +1188,16 @@ class Game{
       this._syncSettingsUI();
     });
 
-    $('btnReverse').addEventListener('click', ()=>{
+    $('btnReverse').addEventListener('pointerdown', (e)=>{
+      e.preventDefault();
       if(this.state!=='playing') return;
       this.input.dirQueue = this.player.facing==='L' ? 'R' : 'L';
       this.input.bufferClimb();
     });
-    $('btnClimb').addEventListener('click', ()=>this.input.bufferClimb());
+    $('btnClimb').addEventListener('pointerdown', (e)=>{
+      e.preventDefault();
+      this.input.bufferClimb();
+    });
 
     $('pauseBtn').addEventListener('click', ()=>this.togglePause());
     $('resumeBtn').addEventListener('click', ()=>this.togglePause());
