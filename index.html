@@ -120,50 +120,56 @@
   /* HUD */
   #hud{
     position:absolute; top:0; left:0; right:0; z-index:10; padding:14px 16px;
-    display:flex; flex-direction:column; gap:8px; pointer-events:none;
+    display:flex; flex-direction:column; align-items:center; pointer-events:none;
   }
+  .hud-inner{ width:100%; max-width:900px; display:flex; flex-direction:column; gap:8px; }
   .hud-top{ display:flex; justify-content:space-between; align-items:flex-start; }
   .hud-card{
     background:rgba(7,21,16,0.55); border:1px solid rgba(201,162,39,0.3); border-radius:10px;
-    padding:6px 12px; backdrop-filter:blur(3px);
+    padding:clamp(6px,0.9vh,12px) clamp(12px,1.4vw,20px); backdrop-filter:blur(3px);
   }
-  .hud-label{ font-size:9px; letter-spacing:0.14em; color:var(--brass); text-transform:uppercase;}
-  .hud-value{ font-size:20px; font-weight:700; color:var(--paper); line-height:1.1;}
-  #fpsCard{ font-size:10px; color:var(--paper-dim); }
+  .hud-label{ font-size:clamp(9px,0.9vw,12px); letter-spacing:0.14em; color:var(--brass); text-transform:uppercase;}
+  .hud-value{ font-size:clamp(20px,2.2vw,28px); font-weight:700; color:var(--paper); line-height:1.1;}
+  #fpsCard{ font-size:clamp(10px,0.9vw,13px); color:var(--paper-dim); }
   .time-gauge-wrap{
     background:rgba(7,21,16,0.55); border:1px solid rgba(201,162,39,0.3); border-radius:10px;
-    padding:6px 10px; backdrop-filter:blur(3px);
+    padding:clamp(6px,0.9vh,12px) clamp(10px,1.2vw,16px); backdrop-filter:blur(3px);
   }
-  .time-gauge-track{ width:100%; height:8px; border-radius:4px; background:rgba(255,255,255,0.08); overflow:hidden; margin-top:4px;}
+  .time-gauge-track{ width:100%; height:clamp(8px,1vh,14px); border-radius:7px; background:rgba(255,255,255,0.08); overflow:hidden; margin-top:4px;}
   .time-gauge-fill{ height:100%; background:linear-gradient(90deg,var(--emerald),var(--brass-bright)); width:100%; transition:width 0.08s linear; }
   .dir-indicator{
     position:absolute; top:14px; left:50%; transform:translateX(-50%);
     background:rgba(7,21,16,0.55); border:1px solid rgba(201,162,39,0.3); border-radius:10px;
-    width:40px; height:40px; display:flex; align-items:center; justify-content:center;
-    font-size:20px; color:var(--brass-bright); pointer-events:none;
+    width:clamp(40px,4vw,60px); height:clamp(40px,4vw,60px); display:flex; align-items:center; justify-content:center;
+    font-size:clamp(20px,2vw,30px); color:var(--brass-bright); pointer-events:none;
   }
-  #hudIcons{ position:absolute; top:14px; right:14px; display:flex; gap:6px; pointer-events:all; z-index:11; }
+  #hudIcons{ position:absolute; top:14px; right:14px; display:flex; gap:clamp(6px,0.6vw,10px); pointer-events:all; z-index:11; }
   .icon-btn{
-    width:34px; height:34px; border-radius:9px; background:rgba(7,21,16,0.55);
-    border:1px solid rgba(201,162,39,0.3); color:var(--paper); font-size:15px; cursor:pointer;
+    width:clamp(34px,3.4vw,50px); height:clamp(34px,3.4vw,50px); border-radius:9px; background:rgba(7,21,16,0.55);
+    border:1px solid rgba(201,162,39,0.3); color:var(--paper); font-size:clamp(15px,1.5vw,22px); cursor:pointer;
     display:flex; align-items:center; justify-content:center;
   }
 
   /* Controls (touch) */
   #controls{
     position:absolute; bottom:0; left:0; right:0; z-index:10;
+    display:flex; justify-content:center;
+    padding:0 16px max(20px,3vh); pointer-events:none;
+  }
+  .controls-inner{
+    width:100%; max-width:1100px;
     display:flex; justify-content:space-between; align-items:flex-end;
-    padding:0 16px 20px; pointer-events:none;
   }
   .corner-btn{
-    pointer-events:all; width:84px; height:84px; border-radius:26px;
+    pointer-events:all;
+    width:clamp(84px,11vw,150px); height:clamp(84px,11vw,150px); border-radius:22%;
     display:flex; flex-direction:column; align-items:center; justify-content:center;
     box-shadow:0 6px 16px rgba(0,0,0,0.45), inset 0 2px 0 rgba(255,255,255,0.08);
     border:2px solid rgba(201,162,39,0.5);
   }
   .corner-btn:active{ transform:scale(0.93); }
-  .corner-btn .icon{ font-size:30px; line-height:1; }
-  .corner-btn .lbl{ font-size:9px; letter-spacing:0.08em; margin-top:3px; opacity:0.85; }
+  .corner-btn .icon{ font-size:clamp(30px,4vw,54px); line-height:1; }
+  .corner-btn .lbl{ font-size:clamp(9px,1vw,14px); letter-spacing:0.08em; margin-top:3px; opacity:0.85; }
   .reverse-btn{
     background:radial-gradient(circle at 35% 28%, rgba(47,111,158,0.45), rgba(12,31,22,0.85));
     color:#8fc4e8;
@@ -314,22 +320,24 @@
 
   <!-- HUD -->
   <div id="hud" class="hidden">
-    <div class="hud-top">
-      <div class="hud-card">
-        <div class="hud-label">층수</div>
-        <div class="hud-value" id="scoreVal">0</div>
+    <div class="hud-inner">
+      <div class="hud-top">
+        <div class="hud-card">
+          <div class="hud-label">층수</div>
+          <div class="hud-value" id="scoreVal">0</div>
+        </div>
+        <div class="hud-card">
+          <div class="hud-label">최고</div>
+          <div class="hud-value" id="bestVal">0</div>
+        </div>
       </div>
-      <div class="hud-card">
-        <div class="hud-label">최고</div>
-        <div class="hud-value" id="bestVal">0</div>
+      <div class="time-gauge-wrap">
+        <div style="display:flex; justify-content:space-between;">
+          <span class="hud-label">시간</span>
+          <span class="hud-label" id="fpsCard"></span>
+        </div>
+        <div class="time-gauge-track"><div class="time-gauge-fill" id="timeFill"></div></div>
       </div>
-    </div>
-    <div class="time-gauge-wrap">
-      <div style="display:flex; justify-content:space-between;">
-        <span class="hud-label">시간</span>
-        <span class="hud-label" id="fpsCard"></span>
-      </div>
-      <div class="time-gauge-track"><div class="time-gauge-fill" id="timeFill"></div></div>
     </div>
   </div>
   <div class="dir-indicator hidden" id="dirIndicator">▲</div>
@@ -340,8 +348,10 @@
   </div>
 
   <div id="controls" class="hidden">
-    <button class="corner-btn reverse-btn" id="btnReverse"><span class="icon">🔄</span><span class="lbl">방향</span></button>
-    <button class="corner-btn climb-btn" id="btnClimb"><span class="icon">▲</span><span class="lbl">오르기</span></button>
+    <div class="controls-inner">
+      <button class="corner-btn reverse-btn" id="btnReverse"><span class="icon">🔄</span><span class="lbl">방향</span></button>
+      <button class="corner-btn climb-btn" id="btnClimb"><span class="icon">▲</span><span class="lbl">오르기</span></button>
+    </div>
   </div>
 
   <!-- PAUSE -->
@@ -953,9 +963,14 @@ class Game{
       $('startScreen').classList.add('hidden');
       $('leaderboardPanel').classList.remove('hidden');
       this.refreshLeaderboard();
+      this._startLeaderboardPolling();
     });
     $('lbRefreshBtn').addEventListener('click', ()=>this.refreshLeaderboard());
-    $('lbDoneBtn').addEventListener('click', ()=>{ $('leaderboardPanel').classList.add('hidden'); $('startScreen').classList.remove('hidden'); });
+    $('lbDoneBtn').addEventListener('click', ()=>{
+      $('leaderboardPanel').classList.add('hidden');
+      $('startScreen').classList.remove('hidden');
+      this._stopLeaderboardPolling();
+    });
 
     $('submitScoreBtn').addEventListener('click', ()=>this.submitScore());
 
@@ -1185,17 +1200,25 @@ class Game{
     }, 600);
   }
 
-  async refreshLeaderboard(){
+  _startLeaderboardPolling(){
+    this._stopLeaderboardPolling();
+    this._lbInterval = setInterval(()=>this.refreshLeaderboard(true), 5000);
+  }
+  _stopLeaderboardPolling(){
+    if(this._lbInterval){ clearInterval(this._lbInterval); this._lbInterval = null; }
+  }
+
+  async refreshLeaderboard(silent){
     const list = document.getElementById('lbList');
     if(!this.leaderboard.configured){
       list.innerHTML = '<div class="lb-empty">Apps Script URL이 아직 설정되지 않았어요.</div>';
       return;
     }
-    list.innerHTML = '<div class="lb-empty">불러오는 중...</div>';
+    if(!silent) list.innerHTML = '<div class="lb-empty">불러오는 중...</div>';
     const data = await this.leaderboard.fetchTop(20);
     if(!data || !data.ok || !data.leaderboard || !data.leaderboard.length){
-      list.innerHTML = '<div class="lb-empty">기록이 없거나 불러오지 못했어요.</div>';
-      return;
+      if(!silent) list.innerHTML = '<div class="lb-empty">기록이 없거나 불러오지 못했어요.</div>';
+      return; // on a silent poll failure, just keep whatever's already shown
     }
     list.innerHTML = data.leaderboard.map(r=>`
       <div class="lb-row">
@@ -1218,6 +1241,10 @@ class Game{
     if(res && res.ok){
       submitBtn.textContent = '등록 완료 ✓';
       status.textContent = '리더보드에 반영됐어요.';
+      // if the leaderboard panel happens to be open behind the scenes, keep it fresh too
+      if(!document.getElementById('leaderboardPanel').classList.contains('hidden')){
+        this.refreshLeaderboard(true);
+      }
     } else {
       submitBtn.disabled = false; submitBtn.textContent = '등록';
       status.textContent = '등록 실패 — Apps Script URL/배포 상태를 확인해줘.';
