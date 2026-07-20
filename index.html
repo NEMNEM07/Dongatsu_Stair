@@ -179,14 +179,17 @@
   }
   .corner-btn{
     pointer-events:all;
-    width:clamp(84px,11vw,150px); height:clamp(84px,11vw,150px); border-radius:22%;
+    width:calc(clamp(84px,11vw,150px) * var(--btn-scale,1));
+    height:calc(clamp(84px,11vw,150px) * var(--btn-scale,1));
+    border-radius:22%;
     display:flex; flex-direction:column; align-items:center; justify-content:center;
     box-shadow:0 6px 16px rgba(0,0,0,0.45), inset 0 2px 0 rgba(255,255,255,0.08);
     border:2px solid rgba(201,162,39,0.5);
+    flex-shrink:0;
   }
   .corner-btn:active{ transform:scale(0.93); }
-  .corner-btn .icon{ font-size:clamp(30px,4vw,54px); line-height:1; }
-  .corner-btn .lbl{ font-size:clamp(9px,1vw,14px); letter-spacing:0.08em; margin-top:3px; opacity:0.85; }
+  .corner-btn .icon{ font-size:calc(clamp(30px,4vw,54px) * var(--btn-scale,1)); line-height:1; }
+  .corner-btn .lbl{ font-size:calc(clamp(9px,1vw,14px) * var(--btn-scale,1)); letter-spacing:0.08em; margin-top:3px; opacity:0.85; }
   .reverse-btn{
     background:radial-gradient(circle at 35% 28%, rgba(47,111,158,0.45), rgba(12,31,22,0.85));
     color:#8fc4e8;
@@ -333,6 +336,13 @@
       <div class="setting-row"><span>효과음</span><div class="toggle" id="toggleSound"></div></div>
       <div class="setting-row"><span>진동</span><div class="toggle" id="toggleVibration"></div></div>
       <div class="setting-row"><span>FPS 표시</span><div class="toggle" id="toggleFps"></div></div>
+      <div class="setting-row" style="flex-direction:column; align-items:stretch; gap:8px;">
+        <div style="display:flex; justify-content:space-between;">
+          <span>조작 버튼 크기</span>
+          <span id="buttonScaleLabel" style="color:var(--brass-bright); font-weight:700;">100%</span>
+        </div>
+        <input type="range" id="buttonScaleSlider" min="50" max="500" step="10" value="100" style="width:100%; accent-color:var(--brass-bright);">
+      </div>
     </div>
     <button class="btn btn-primary" id="settingsDoneBtn">완료</button>
   </div>
@@ -435,7 +445,7 @@ const RENDER_SCALE       = 1.55; // visual zoom — world logic/spacing stays th
 ========================================================= */
 const CONFIG = {
   LEADERBOARD_URL: 'https://script.google.com/macros/s/AKfycbysXqxWB0tDa4P7Vbdvruouhk74NScrMIQy5n5Ev2rOBzZODnyJWJiAAWEyVK9p8xyakA/exec',
-  GAME_VERSION: '1.0.4' // Config 시트의 RequiredVersion과 다르면 접속 차단됨
+  GAME_VERSION: '1.0.5' // Config 시트의 RequiredVersion과 다르면 접속 차단됨
 };
 
 /* =========================================================
@@ -446,7 +456,7 @@ class StorageManager{
   // Claude artifact sandbox, so real localStorage is the correct/only choice
   // here — window.storage doesn't exist outside the Claude.ai artifact preview.
   constructor(){
-    this.defaults = { soundOn:true, vibrationOn:true, showFps:false };
+    this.defaults = { soundOn:true, vibrationOn:true, showFps:false, buttonScale:100 };
   }
   async loadBest(){
     try{ return parseInt(localStorage.getItem('donkkas_best')||'0',10)||0; }catch(e){ return 0; }
@@ -1006,6 +1016,14 @@ class Game{
     document.getElementById('toggleSound').classList.toggle('on', this.settings.soundOn);
     document.getElementById('toggleVibration').classList.toggle('on', this.settings.vibrationOn);
     document.getElementById('toggleFps').classList.toggle('on', this.settings.showFps);
+    const scale = this.settings.buttonScale || 100;
+    document.getElementById('buttonScaleSlider').value = scale;
+    document.getElementById('buttonScaleLabel').textContent = scale + '%';
+    this._applyButtonScale();
+  }
+
+  _applyButtonScale(){
+    document.documentElement.style.setProperty('--btn-scale', (this.settings.buttonScale||100)/100);
   }
 
   _bindUI(){
@@ -1042,6 +1060,13 @@ class Game{
     $('toggleSound').addEventListener('click', ()=>{ this.settings.soundOn=!this.settings.soundOn; this.sound.enabled=this.settings.soundOn; this._syncSettingsUI(); this.storage.saveSettings(this.settings); });
     $('toggleVibration').addEventListener('click', ()=>{ this.settings.vibrationOn=!this.settings.vibrationOn; this._syncSettingsUI(); this.storage.saveSettings(this.settings); });
     $('toggleFps').addEventListener('click', ()=>{ this.settings.showFps=!this.settings.showFps; this._syncSettingsUI(); this.storage.saveSettings(this.settings); });
+
+    $('buttonScaleSlider').addEventListener('input', (e)=>{
+      this.settings.buttonScale = parseInt(e.target.value,10) || 100;
+      document.getElementById('buttonScaleLabel').textContent = this.settings.buttonScale + '%';
+      this._applyButtonScale();
+    });
+    $('buttonScaleSlider').addEventListener('change', ()=>{ this.storage.saveSettings(this.settings); });
 
     $('btnReverse').addEventListener('click', ()=>{
       if(this.state!=='playing') return;
