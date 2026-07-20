@@ -344,6 +344,13 @@
         </div>
         <input type="range" id="buttonScaleSlider" min="50" max="500" step="10" value="100" style="width:100%; accent-color:var(--brass-bright);">
       </div>
+      <div class="setting-row" style="flex-direction:column; align-items:stretch; gap:8px;">
+        <div style="display:flex; justify-content:space-between;">
+          <span>화면 확대 배율</span>
+          <span id="zoomScaleLabel" style="color:var(--brass-bright); font-weight:700;">100%</span>
+        </div>
+        <input type="range" id="zoomScaleSlider" min="50" max="200" step="5" value="100" style="width:100%; accent-color:var(--brass-bright);">
+      </div>
     </div>
     <div class="panel">
       <h2>PC 키 설정</h2>
@@ -447,12 +454,14 @@ const INPUT_BUFFER_MS    = 100;   // climb input buffer window
 const TIME_START         = 8.0;   // seconds
 const TIME_MAX           = 8.0;
 const TIME_DECAY_BASE    = 1.0;
-const TIME_DECAY_PER_SCORE = 0.012;
+const TIME_DECAY_MAX_EXTRA = 5.3;   // decay asymptotically approaches BASE+MAX_EXTRA, never past it
+const TIME_DECAY_HALFLIFE  = 380;   // floors — how fast difficulty ramps up toward the cap
 const TIME_GAIN_PER_STEP = 1.15;
 const COMBO_WINDOW_MS    = 1000;
 const PARTICLE_POOL_SIZE = 80;
 const COLOR_CYCLE_FLOORS = 100;
-const RENDER_SCALE       = 1.55; // visual zoom — world logic/spacing stays the same, everything just draws bigger
+const BASE_RENDER_SCALE  = 1.55; // baseline visual zoom — world logic/spacing stays the same, everything just draws bigger
+let RENDER_SCALE         = BASE_RENDER_SCALE; // live value = BASE_RENDER_SCALE * (settings.zoomScale/100), updated from settings
 
 // Real donkatsu photo (user-provided, background removed), embedded as a
 // data URI so the game stays a single self-contained file.
@@ -465,7 +474,7 @@ DONKATSU_IMG.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAVQAAAC5CAYAAA
 ========================================================= */
 const CONFIG = {
   LEADERBOARD_URL: 'https://script.google.com/macros/s/AKfycbysXqxWB0tDa4P7Vbdvruouhk74NScrMIQy5n5Ev2rOBzZODnyJWJiAAWEyVK9p8xyakA/exec',
-  GAME_VERSION: '1.1.1' // Config 시트의 RequiredVersion과 다르면 접속 차단됨
+  GAME_VERSION: '1.2.0' // Config 시트의 RequiredVersion과 다르면 접속 차단됨
 };
 
 /* =========================================================
@@ -476,7 +485,7 @@ class StorageManager{
   // Claude artifact sandbox, so real localStorage is the correct/only choice
   // here — window.storage doesn't exist outside the Claude.ai artifact preview.
   constructor(){
-    this.defaults = { soundOn:true, vibrationOn:true, showFps:false, buttonScale:100, customReverseKey:null, customClimbKey:null };
+    this.defaults = { soundOn:true, vibrationOn:true, showFps:false, buttonScale:100, zoomScale:100, customReverseKey:null, customClimbKey:null };
   }
   async loadBest(){
     try{ return parseInt(localStorage.getItem('donkkas_best')||'0',10)||0; }catch(e){ return 0; }
@@ -772,6 +781,12 @@ class InputManager{
     this.dirQueue = null; // 'L' | 'R' | null
     this.reversePending = false;
     this._bindKeyboard();
+  }
+  reset(){
+    this.pendingClimbUntil = 0;
+    this.dirQueue = null;
+    this.reversePending = false;
+    this.pausePressed = false;
   }
   _bindKeyboard(){
     window.addEventListener('keydown', (e)=>{
@@ -1116,6 +1131,11 @@ class Game{
     document.getElementById('buttonScaleLabel').textContent = scale + '%';
     this._applyButtonScale();
 
+    const zoom = this.settings.zoomScale || 100;
+    document.getElementById('zoomScaleSlider').value = zoom;
+    document.getElementById('zoomScaleLabel').textContent = zoom + '%';
+    this._applyZoomScale();
+
     document.getElementById('bindReverseKeyBtn').textContent =
       this._bindingTarget==='reverse' ? '키를 눌러주세요...' : this._keyLabel(this.settings.customReverseKey, '←');
     document.getElementById('bindClimbKeyBtn').textContent =
@@ -1134,6 +1154,10 @@ class Game{
 
   _applyButtonScale(){
     document.documentElement.style.setProperty('--btn-scale', (this.settings.buttonScale||100)/100);
+  }
+
+  _applyZoomScale(){
+    RENDER_SCALE = BASE_RENDER_SCALE * ((this.settings.zoomScale||100)/100);
   }
 
   _bindUI(){
@@ -1176,6 +1200,13 @@ class Game{
       this._applyButtonScale();
     });
     $('buttonScaleSlider').addEventListener('change', ()=>{ this.storage.saveSettings(this.settings); });
+
+    $('zoomScaleSlider').addEventListener('input', (e)=>{
+      this.settings.zoomScale = parseInt(e.target.value,10) || 100;
+      document.getElementById('zoomScaleLabel').textContent = this.settings.zoomScale + '%';
+      this._applyZoomScale();
+    });
+    $('zoomScaleSlider').addEventListener('change', ()=>{ this.storage.saveSettings(this.settings); });
 
     $('bindReverseKeyBtn').addEventListener('click', ()=>{
       this._bindingTarget = 'reverse';
@@ -1270,6 +1301,7 @@ class Game{
   }
 
   startGame(){
+    this.input.reset();
     document.getElementById('startScreen').classList.add('hidden');
     document.getElementById('customizePanel').classList.add('hidden');
     document.getElementById('settingsPanel').classList.add('hidden');
@@ -1490,7 +1522,7 @@ class Game{
     this.stairMgr.pruneBehind(this.player.stairIndex);
 
     // time decay
-    const decay = TIME_DECAY_BASE + this.score*TIME_DECAY_PER_SCORE;
+    const decay = TIME_DECAY_BASE + TIME_DECAY_MAX_EXTRA * (1 - Math.exp(-this.score / TIME_DECAY_HALFLIFE));
     this.timeLeft -= decay*dt;
     if(this.timeLeft <= 0){
       this.timeLeft = 0;
