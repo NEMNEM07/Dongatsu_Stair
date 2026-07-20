@@ -362,8 +362,6 @@
   </div>
   <div id="hudIcons" class="hidden">
     <button class="icon-btn" id="pauseBtn">⏸</button>
-    <button class="icon-btn" id="screenshotBtn">📷</button>
-    <button class="icon-btn" id="fullscreenBtn">⛶</button>
   </div>
 
   <div id="controls" class="hidden">
@@ -437,7 +435,7 @@ const RENDER_SCALE       = 1.55; // visual zoom — world logic/spacing stays th
 ========================================================= */
 const CONFIG = {
   LEADERBOARD_URL: 'https://script.google.com/macros/s/AKfycbysXqxWB0tDa4P7Vbdvruouhk74NScrMIQy5n5Ev2rOBzZODnyJWJiAAWEyVK9p8xyakA/exec',
-  GAME_VERSION: '1.0.3' // Config 시트의 RequiredVersion과 다르면 접속 차단됨
+  GAME_VERSION: '1.0.4' // Config 시트의 RequiredVersion과 다르면 접속 차단됨
 };
 
 /* =========================================================
@@ -1055,8 +1053,6 @@ class Game{
     $('pauseBtn').addEventListener('click', ()=>this.togglePause());
     $('resumeBtn').addEventListener('click', ()=>this.togglePause());
     $('pauseMenuBtn').addEventListener('click', ()=>this.goToMenu());
-    $('screenshotBtn').addEventListener('click', ()=>this.takeScreenshot());
-    $('fullscreenBtn').addEventListener('click', ()=>this.toggleFullscreen());
 
     $('goRetryBtn').addEventListener('click', ()=>this.startGame());
     $('goMenuBtn').addEventListener('click', ()=>this.goToMenu());
@@ -1170,19 +1166,6 @@ class Game{
     else if(this.state==='paused'){ this.state='playing'; document.getElementById('pauseOverlay').classList.add('hidden'); this._lastT=performance.now(); }
   }
 
-  toggleFullscreen(){
-    if(!document.fullscreenElement) document.documentElement.requestFullscreen().catch(()=>{});
-    else document.exitFullscreen().catch(()=>{});
-  }
-
-  takeScreenshot(){
-    try{
-      const url = this.canvas.toDataURL('image/png');
-      const a = document.createElement('a');
-      a.href = url; a.download = `donkkas-stairs-${this.score}.png`;
-      a.click();
-    }catch(e){}
-  }
 
   attemptClimb(){
     const cur = this.stairMgr.get(this.player.stairIndex);
