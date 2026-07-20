@@ -418,7 +418,7 @@ const RENDER_SCALE       = 1.55; // visual zoom — world logic/spacing stays th
 ========================================================= */
 const CONFIG = {
   LEADERBOARD_URL: 'https://script.google.com/macros/s/AKfycbysXqxWB0tDa4P7Vbdvruouhk74NScrMIQy5n5Ev2rOBzZODnyJWJiAAWEyVK9p8xyakA/exec',
-  GAME_VERSION: '1.0.0' // Config 시트의 RequiredVersion과 다르면 접속 차단됨
+  GAME_VERSION: '1.0.1' // Config 시트의 RequiredVersion과 다르면 접속 차단됨
 };
 
 /* =========================================================
@@ -1412,20 +1412,20 @@ class Game{
 
   _themeHue(){ return (45 + Math.floor(this.score/COLOR_CYCLE_FLOORS)*47) % 360; }
 
-  _drawStep(sx, sy, isNext, isPast, hue){
+  _drawStep(sx, sy, isCurrent, isPast, hue){
     const ctx=this.ctx, w=66*RENDER_SCALE, h=16*RENDER_SCALE, depth=14*RENDER_SCALE;
     ctx.save(); ctx.translate(sx,sy);
     ctx.fillStyle = isPast ? 'rgba(40,70,52,0.5)' : '#173523';
     ctx.fillRect(-w/2, 6*RENDER_SCALE, w, depth);
     const grad = ctx.createLinearGradient(-w/2,0,w/2,0);
-    if(isNext){ grad.addColorStop(0, `hsl(${hue},85%,68%)`); grad.addColorStop(1, `hsl(${hue},70%,48%)`); }
+    if(isCurrent){ grad.addColorStop(0, `hsl(${hue},85%,68%)`); grad.addColorStop(1, `hsl(${hue},70%,48%)`); }
     else if(isPast){ grad.addColorStop(0,'rgba(60,100,76,0.5)'); grad.addColorStop(1,'rgba(40,80,58,0.5)'); }
     else { grad.addColorStop(0,'#2f6f9e'); grad.addColorStop(1,'#20496b'); }
     ctx.fillStyle=grad;
     ctx.beginPath();
     if(ctx.roundRect) ctx.roundRect(-w/2,-h/2,w,h,4*RENDER_SCALE); else ctx.rect(-w/2,-h/2,w,h);
     ctx.fill();
-    if(isNext){
+    if(isCurrent){
       ctx.strokeStyle=`hsla(${hue},90%,70%,0.9)`; ctx.lineWidth=2*RENDER_SCALE; ctx.stroke();
       ctx.shadowColor=`hsl(${hue},90%,60%)`; ctx.shadowBlur=14; ctx.stroke(); ctx.shadowBlur=0;
     }
@@ -1460,7 +1460,7 @@ class Game{
       if(!st) continue;
       const [sx,sy] = this.worldToScreen(st.worldX, st.worldY);
       if(sy<-60||sy>H+60) continue;
-      this._drawStep(sx, sy, i===this.player.stairIndex+1, i<this.player.stairIndex, hue);
+      this._drawStep(sx, sy, i===this.player.stairIndex, i<this.player.stairIndex, hue);
     }
 
     if(this.spectators){
