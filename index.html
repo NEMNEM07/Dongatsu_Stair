@@ -344,6 +344,26 @@
         <input type="range" id="buttonScaleSlider" min="50" max="500" step="10" value="100" style="width:100%; accent-color:var(--brass-bright);">
       </div>
     </div>
+    <div class="panel">
+      <h2>PC 키 설정</h2>
+      <div class="setting-row">
+        <span>방향 반전 키</span>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <button class="btn btn-ghost" id="bindReverseKeyBtn" style="padding:6px 12px; font-size:12px; min-width:88px;">←</button>
+          <button class="link-btn" id="resetReverseKeyBtn" style="margin:0;">초기화</button>
+        </div>
+      </div>
+      <div class="setting-row">
+        <span>오르기 키</span>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <button class="btn btn-ghost" id="bindClimbKeyBtn" style="padding:6px 12px; font-size:12px; min-width:88px;">Space</button>
+          <button class="link-btn" id="resetClimbKeyBtn" style="margin:0;">초기화</button>
+        </div>
+      </div>
+      <div style="font-size:10px; color:var(--paper-dim); margin-top:6px; line-height:1.5;">
+        버튼 누르고 원하는 키를 눌러줘 (Esc로 취소). 기본 방향키/WASD/Space는 항상 같이 동작해.
+      </div>
+    </div>
     <button class="btn btn-primary" id="settingsDoneBtn">완료</button>
   </div>
 
@@ -445,7 +465,7 @@ const RENDER_SCALE       = 1.55; // visual zoom — world logic/spacing stays th
 ========================================================= */
 const CONFIG = {
   LEADERBOARD_URL: 'https://script.google.com/macros/s/AKfycbysXqxWB0tDa4P7Vbdvruouhk74NScrMIQy5n5Ev2rOBzZODnyJWJiAAWEyVK9p8xyakA/exec',
-  GAME_VERSION: '1.0.5' // Config 시트의 RequiredVersion과 다르면 접속 차단됨
+  GAME_VERSION: '1.0.7' // Config 시트의 RequiredVersion과 다르면 접속 차단됨
 };
 
 /* =========================================================
@@ -456,7 +476,7 @@ class StorageManager{
   // Claude artifact sandbox, so real localStorage is the correct/only choice
   // here — window.storage doesn't exist outside the Claude.ai artifact preview.
   constructor(){
-    this.defaults = { soundOn:true, vibrationOn:true, showFps:false, buttonScale:100 };
+    this.defaults = { soundOn:true, vibrationOn:true, showFps:false, buttonScale:100, customReverseKey:null, customClimbKey:null };
   }
   async loadBest(){
     try{ return parseInt(localStorage.getItem('donkkas_best')||'0',10)||0; }catch(e){ return 0; }
@@ -508,14 +528,21 @@ class Leaderboard{
   async fetchTop(n){
     if(!this.configured) return { ok:false, error:'not_configured' };
     try{
-      const res = await fetch(`${this.url}?action=list&n=${n||20}`);
+      const res = await fetch(`${this.url}?action=list&n=${n||20}&_=${Date.now()}`, { cache:'no-store' });
       return await res.json();
     }catch(e){ return { ok:false, error:String(e) }; }
   }
   async checkStatus(){
     if(!this.configured) return { ok:false, error:'not_configured' };
     try{
-      const res = await fetch(`${this.url}?action=status`);
+      const res = await fetch(`${this.url}?action=status&_=${Date.now()}`, { cache:'no-store' });
+      return await res.json();
+    }catch(e){ return { ok:false, error:String(e) }; }
+  }
+  async fetchMyScore(name){
+    if(!this.configured) return { ok:false, error:'not_configured' };
+    try{
+      const res = await fetch(`${this.url}?action=myscore&name=${encodeURIComponent(name)}&_=${Date.now()}`, { cache:'no-store' });
       return await res.json();
     }catch(e){ return { ok:false, error:String(e) }; }
   }
@@ -796,8 +823,10 @@ class Game{
 
     this.faces = { player: null };
     this.friends = [];
+    this._bindingTarget = null; // 'reverse' | 'climb' | null — set while waiting to capture a key
 
     this._bindUI();
+    this._bindGlobalKeys();
     this._resize();
     window.addEventListener('resize', ()=>this._resize());
     if(window.ResizeObserver){
@@ -805,6 +834,45 @@ class Game{
       this._ro.observe(this.canvas);
     }
     this._initAsync();
+  }
+
+  _bindGlobalKeys(){
+    window.addEventListener('keydown', (e)=>{
+      if(e.repeat) return;
+
+      // key-binding capture takes priority over everything else
+      if(this._bindingTarget){
+        e.preventDefault();
+        if(e.code === 'Escape'){
+          this._bindingTarget = null;
+        } else if(this._bindingTarget === 'reverse'){
+          this.settings.customReverseKey = e.code;
+          this._bindingTarget = null;
+          this.storage.saveSettings(this.settings);
+        } else if(this._bindingTarget === 'climb'){
+          this.settings.customClimbKey = e.code;
+          this._bindingTarget = null;
+          this.storage.saveSettings(this.settings);
+        }
+        this._syncSettingsUI();
+        return;
+      }
+
+      // Enter restarts immediately from the game-over screen
+      if(e.key === 'Enter' && this.state === 'gameover'){
+        e.preventDefault();
+        this.startGame();
+        return;
+      }
+
+      if(this.state !== 'playing') return;
+      if(this.settings.customReverseKey && e.code === this.settings.customReverseKey){
+        this.input.reversePending = true;
+      }
+      if(this.settings.customClimbKey && e.code === this.settings.customClimbKey){
+        this.input.bufferClimb();
+      }
+    });
   }
 
   async _initAsync(){
@@ -828,8 +896,24 @@ class Game{
       document.getElementById('authScreen').classList.add('hidden');
       document.getElementById('startScreen').classList.remove('hidden');
       this._refreshAuthUI();
+      this._syncBestFromServer();
     } else {
       document.getElementById('authScreen').classList.remove('hidden');
+    }
+  }
+
+  // The displayed "best" used to come from localStorage, which is per-device
+  // and drifted between browsers/phones for the same account. For logged-in
+  // players, the leaderboard entry is the source of truth instead.
+  async _syncBestFromServer(){
+    if(!this.session || !this.session.username || !this.leaderboard.configured) return;
+    const res = await this.leaderboard.fetchMyScore(this.session.username);
+    if(res && res.ok && typeof res.score === 'number'){
+      this.best = Math.max(this.best, res.score);
+      this.storage.saveBest(this.best); // keep local cache in sync too, as an offline fallback
+      document.getElementById('bestBadge').textContent = this.best;
+      const bestVal = document.getElementById('bestVal');
+      if(bestVal) bestVal.textContent = this.best;
     }
   }
 
@@ -971,6 +1055,7 @@ class Game{
       document.getElementById('authScreen').classList.add('hidden');
       document.getElementById('startScreen').classList.remove('hidden');
       this._refreshAuthUI();
+      this._syncBestFromServer();
       return;
     }
 
@@ -1020,6 +1105,21 @@ class Game{
     document.getElementById('buttonScaleSlider').value = scale;
     document.getElementById('buttonScaleLabel').textContent = scale + '%';
     this._applyButtonScale();
+
+    document.getElementById('bindReverseKeyBtn').textContent =
+      this._bindingTarget==='reverse' ? '키를 눌러주세요...' : this._keyLabel(this.settings.customReverseKey, '←');
+    document.getElementById('bindClimbKeyBtn').textContent =
+      this._bindingTarget==='climb' ? '키를 눌러주세요...' : this._keyLabel(this.settings.customClimbKey, 'Space');
+  }
+
+  _keyLabel(code, fallback){
+    if(!code) return fallback || '설정 안 함';
+    const map = { Space:'Space', ArrowLeft:'←', ArrowRight:'→', ArrowUp:'↑', ArrowDown:'↓', Enter:'Enter',
+      ShiftLeft:'Shift', ShiftRight:'Shift', ControlLeft:'Ctrl', ControlRight:'Ctrl', AltLeft:'Alt', AltRight:'Alt' };
+    if(map[code]) return map[code];
+    if(code.startsWith('Key')) return code.slice(3);
+    if(code.startsWith('Digit')) return code.slice(5);
+    return code;
   }
 
   _applyButtonScale(){
@@ -1067,6 +1167,25 @@ class Game{
       this._applyButtonScale();
     });
     $('buttonScaleSlider').addEventListener('change', ()=>{ this.storage.saveSettings(this.settings); });
+
+    $('bindReverseKeyBtn').addEventListener('click', ()=>{
+      this._bindingTarget = 'reverse';
+      this._syncSettingsUI();
+    });
+    $('bindClimbKeyBtn').addEventListener('click', ()=>{
+      this._bindingTarget = 'climb';
+      this._syncSettingsUI();
+    });
+    $('resetReverseKeyBtn').addEventListener('click', ()=>{
+      this.settings.customReverseKey = null;
+      this.storage.saveSettings(this.settings);
+      this._syncSettingsUI();
+    });
+    $('resetClimbKeyBtn').addEventListener('click', ()=>{
+      this.settings.customClimbKey = null;
+      this.storage.saveSettings(this.settings);
+      this._syncSettingsUI();
+    });
 
     $('btnReverse').addEventListener('click', ()=>{
       if(this.state!=='playing') return;
@@ -1316,6 +1435,12 @@ class Game{
     if(res && res.ok){
       submitBtn.textContent = '등록 완료 ✓';
       status.textContent = '리더보드에 반영됐어요.';
+      if(this.score > this.best){
+        this.best = this.score;
+        this.storage.saveBest(this.best);
+        document.getElementById('bestBadge').textContent = this.best;
+        document.getElementById('finalBest').textContent = '최고 기록 ' + this.best;
+      }
       // if the leaderboard panel happens to be open behind the scenes, keep it fresh too
       if(!document.getElementById('leaderboardPanel').classList.contains('hidden')){
         this.refreshLeaderboard(true);
