@@ -354,23 +354,13 @@
     </div>
     <div class="panel">
       <h2>PC 키 설정</h2>
-      <div class="setting-row">
-        <span>방향 반전 키</span>
-        <div style="display:flex; gap:6px; align-items:center;">
-          <button class="btn btn-ghost" id="bindReverseKeyBtn" style="padding:6px 12px; font-size:12px; min-width:88px;">←</button>
-          <button class="link-btn" id="resetReverseKeyBtn" style="margin:0;">초기화</button>
-        </div>
+      <div style="font-size:10px; color:var(--paper-dim); margin-bottom:10px; line-height:1.5;">
+        각 동작마다 키를 최대 3개까지 지정할 수 있어. 슬롯 누르고 원하는 키를 눌러줘 (Esc로 취소). 기본 키는 없으니 여기서 직접 등록해야 PC에서 조작돼.
       </div>
-      <div class="setting-row">
-        <span>오르기 키</span>
-        <div style="display:flex; gap:6px; align-items:center;">
-          <button class="btn btn-ghost" id="bindClimbKeyBtn" style="padding:6px 12px; font-size:12px; min-width:88px;">Space</button>
-          <button class="link-btn" id="resetClimbKeyBtn" style="margin:0;">초기화</button>
-        </div>
-      </div>
-      <div style="font-size:10px; color:var(--paper-dim); margin-top:6px; line-height:1.5;">
-        버튼 누르고 원하는 키를 눌러줘 (Esc로 취소). 기본 방향키/WASD/Space는 항상 같이 동작해.
-      </div>
+      <div style="font-size:12px; color:var(--brass); margin-bottom:6px;">방향 반전</div>
+      <div id="reverseKeySlots" style="display:flex; gap:8px; margin-bottom:14px;"></div>
+      <div style="font-size:12px; color:var(--brass); margin-bottom:6px;">오르기</div>
+      <div id="climbKeySlots" style="display:flex; gap:8px;"></div>
     </div>
     <button class="btn btn-primary" id="settingsDoneBtn">완료</button>
   </div>
@@ -474,7 +464,7 @@ DONKATSU_IMG.src = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAVQAAAC5CAYAAA
 ========================================================= */
 const CONFIG = {
   LEADERBOARD_URL: 'https://script.google.com/macros/s/AKfycbysXqxWB0tDa4P7Vbdvruouhk74NScrMIQy5n5Ev2rOBzZODnyJWJiAAWEyVK9p8xyakA/exec',
-  GAME_VERSION: '1.2.0' // Config 시트의 RequiredVersion과 다르면 접속 차단됨
+  GAME_VERSION: '1.3.0' // Config 시트의 RequiredVersion과 다르면 접속 차단됨
 };
 
 /* =========================================================
@@ -485,7 +475,7 @@ class StorageManager{
   // Claude artifact sandbox, so real localStorage is the correct/only choice
   // here — window.storage doesn't exist outside the Claude.ai artifact preview.
   constructor(){
-    this.defaults = { soundOn:true, vibrationOn:true, showFps:false, buttonScale:100, zoomScale:100, customReverseKey:null, customClimbKey:null };
+    this.defaults = { soundOn:true, vibrationOn:true, showFps:false, buttonScale:100, zoomScale:100, reverseKeys:[], climbKeys:[] };
   }
   async loadBest(){
     try{ return parseInt(localStorage.getItem('donkkas_best')||'0',10)||0; }catch(e){ return 0; }
@@ -791,13 +781,7 @@ class InputManager{
   _bindKeyboard(){
     window.addEventListener('keydown', (e)=>{
       if(e.repeat) return;
-      switch(e.key){
-        case 'ArrowLeft': case 'a': case 'A':
-        case 'ArrowRight': case 'd': case 'D':
-          this.reversePending = true; break;
-        case ' ': case 'w': case 'W': this.bufferClimb(); e.preventDefault(); break;
-        case 'p': case 'P': this.pausePressed = true; break;
-      }
+      if(e.key==='p' || e.key==='P') this.pausePressed = true;
     });
   }
   consumeReverse(){ const r = this.reversePending; this.reversePending = false; return r; }
@@ -848,7 +832,7 @@ class Game{
 
     this.faces = { player: null };
     this.friends = [];
-    this._bindingTarget = null; // 'reverse' | 'climb' | null — set while waiting to capture a key
+    this._bindingTarget = null; // {action:'reverse'|'climb', slot:0-2} | null — set while waiting to capture a key
 
     this._bindUI();
     this._bindGlobalKeys();
@@ -868,18 +852,15 @@ class Game{
       // key-binding capture takes priority over everything else
       if(this._bindingTarget){
         e.preventDefault();
-        if(e.code === 'Escape'){
-          this._bindingTarget = null;
-        } else if(this._bindingTarget === 'reverse'){
-          this.settings.customReverseKey = e.code;
-          this._bindingTarget = null;
-          this.storage.saveSettings(this.settings);
-        } else if(this._bindingTarget === 'climb'){
-          this.settings.customClimbKey = e.code;
-          this._bindingTarget = null;
+        const { action, slot } = this._bindingTarget;
+        if(e.code !== 'Escape'){
+          const arr = this.settings[action+'Keys'];
+          arr[slot] = e.code;
           this.storage.saveSettings(this.settings);
         }
-        this._syncSettingsUI();
+        this._bindingTarget = null;
+        this._renderKeySlots('reverse');
+        this._renderKeySlots('climb');
         return;
       }
 
@@ -891,10 +872,12 @@ class Game{
       }
 
       if(this.state !== 'playing') return;
-      if(this.settings.customReverseKey && e.code === this.settings.customReverseKey){
+      if((this.settings.reverseKeys||[]).includes(e.code)){
+        e.preventDefault();
         this.input.reversePending = true;
       }
-      if(this.settings.customClimbKey && e.code === this.settings.customClimbKey){
+      if((this.settings.climbKeys||[]).includes(e.code)){
+        e.preventDefault();
         this.input.bufferClimb();
       }
     });
@@ -1136,10 +1119,44 @@ class Game{
     document.getElementById('zoomScaleLabel').textContent = zoom + '%';
     this._applyZoomScale();
 
-    document.getElementById('bindReverseKeyBtn').textContent =
-      this._bindingTarget==='reverse' ? '키를 눌러주세요...' : this._keyLabel(this.settings.customReverseKey, '←');
-    document.getElementById('bindClimbKeyBtn').textContent =
-      this._bindingTarget==='climb' ? '키를 눌러주세요...' : this._keyLabel(this.settings.customClimbKey, 'Space');
+    this._renderKeySlots('reverse');
+    this._renderKeySlots('climb');
+  }
+
+  _renderKeySlots(action){
+    const container = document.getElementById(action+'KeySlots');
+    if(!container) return;
+    const keys = this.settings[action+'Keys'] || [];
+    container.innerHTML = '';
+    for(let slot=0; slot<3; slot++){
+      const wrap = document.createElement('div');
+      wrap.style.cssText = 'display:flex; flex-direction:column; align-items:center; gap:3px;';
+
+      const btn = document.createElement('button');
+      btn.className = 'btn btn-ghost';
+      btn.style.cssText = 'padding:6px 10px; font-size:12px; min-width:64px;';
+      const isCapturing = this._bindingTarget && this._bindingTarget.action===action && this._bindingTarget.slot===slot;
+      btn.textContent = isCapturing ? '...' : this._keyLabel(keys[slot], '설정 안 함');
+      btn.addEventListener('click', ()=>{
+        this._bindingTarget = { action, slot };
+        this._renderKeySlots('reverse');
+        this._renderKeySlots('climb');
+      });
+      wrap.appendChild(btn);
+
+      const clearBtn = document.createElement('button');
+      clearBtn.className = 'link-btn';
+      clearBtn.style.cssText = 'margin:0; font-size:9px;';
+      clearBtn.textContent = '지우기';
+      clearBtn.addEventListener('click', ()=>{
+        this.settings[action+'Keys'][slot] = null;
+        this.storage.saveSettings(this.settings);
+        this._renderKeySlots(action);
+      });
+      wrap.appendChild(clearBtn);
+
+      container.appendChild(wrap);
+    }
   }
 
   _keyLabel(code, fallback){
@@ -1207,25 +1224,6 @@ class Game{
       this._applyZoomScale();
     });
     $('zoomScaleSlider').addEventListener('change', ()=>{ this.storage.saveSettings(this.settings); });
-
-    $('bindReverseKeyBtn').addEventListener('click', ()=>{
-      this._bindingTarget = 'reverse';
-      this._syncSettingsUI();
-    });
-    $('bindClimbKeyBtn').addEventListener('click', ()=>{
-      this._bindingTarget = 'climb';
-      this._syncSettingsUI();
-    });
-    $('resetReverseKeyBtn').addEventListener('click', ()=>{
-      this.settings.customReverseKey = null;
-      this.storage.saveSettings(this.settings);
-      this._syncSettingsUI();
-    });
-    $('resetClimbKeyBtn').addEventListener('click', ()=>{
-      this.settings.customClimbKey = null;
-      this.storage.saveSettings(this.settings);
-      this._syncSettingsUI();
-    });
 
     $('btnReverse').addEventListener('pointerdown', (e)=>{
       e.preventDefault();
