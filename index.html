@@ -254,7 +254,7 @@
     <div class="welcome-line hidden" id="welcomeLine"></div>
     <div class="best-badge">최고 기록 <b id="bestBadge">0</b>층</div>
     <div class="controls-card">
-      <b>PC</b> — ←/→(A/D) 방향 전환 · Space/W 오르기 · P 일시정지<br>
+      <b>PC</b> — ←/→(A/D) 방향 반전(회전+전진) · Space/W 오르기 · P 일시정지<br>
       <b>모바일</b> — 왼쪽 아래 버튼으로 방향 반전, 오른쪽 아래 버튼으로 오르기
     </div>
     <div class="btn-row">
@@ -687,19 +687,22 @@ class InputManager{
   constructor(){
     this.pendingClimbUntil = 0;
     this.dirQueue = null; // 'L' | 'R' | null
+    this.reversePending = false;
     this._bindKeyboard();
   }
   _bindKeyboard(){
     window.addEventListener('keydown', (e)=>{
       if(e.repeat) return;
       switch(e.key){
-        case 'ArrowLeft': case 'a': case 'A': this.dirQueue='L'; this.bufferClimb(); break;
-        case 'ArrowRight': case 'd': case 'D': this.dirQueue='R'; this.bufferClimb(); break;
+        case 'ArrowLeft': case 'a': case 'A':
+        case 'ArrowRight': case 'd': case 'D':
+          this.reversePending = true; break;
         case ' ': case 'w': case 'W': this.bufferClimb(); e.preventDefault(); break;
         case 'p': case 'P': this.pausePressed = true; break;
       }
     });
   }
+  consumeReverse(){ const r = this.reversePending; this.reversePending = false; return r; }
   bufferClimb(){ this.pendingClimbUntil = performance.now() + INPUT_BUFFER_MS; }
   consumeClimb(){
     if(performance.now() < this.pendingClimbUntil){
@@ -1216,6 +1219,11 @@ class Game{
   _update(dt){
     if(this.input.consumePause()) this.togglePause();
     if(this.state!=='playing') return;
+
+    if(this.input.consumeReverse()){
+      this.input.dirQueue = this.player.facing==='L' ? 'R' : 'L';
+      this.input.bufferClimb();
+    }
 
     const dir = this.input.consumeDir();
     if(dir) this.player.turn(dir, this.settings.soundOn?this.sound:null);
