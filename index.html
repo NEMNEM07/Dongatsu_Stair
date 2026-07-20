@@ -62,9 +62,13 @@
   }
   .controls-card b{ color:var(--brass-bright); }
 
+  .welcome-line{ font-size:12px; color:var(--brass-bright); margin-top:-4px; margin-bottom:6px; }
   .link-btn{
     background:none; border:none; color:var(--paper-dim); font-size:12px;
     text-decoration:underline; cursor:pointer; margin-top:14px;
+  }
+  #authTabLogin.active, #authTabSignup.active{
+    background: rgba(201,162,39,0.28); border-color: rgba(201,162,39,0.6); color: var(--brass-bright);
   }
 
   /* Customize panel */
@@ -206,11 +210,34 @@
 <div id="app">
   <canvas id="game"></canvas>
 
+  <!-- AUTH SCREEN (shown first) -->
+  <div class="screen" id="authScreen">
+    <div class="eyebrow">Endless Ascent</div>
+    <h1>돈가스 <span>계단</span></h1>
+    <div class="subtitle">계정으로 로그인하면 리더보드에 기록이 남아</div>
+    <div class="panel" style="max-width:320px;">
+      <div style="display:flex; gap:8px; margin-bottom:12px;">
+        <button class="btn btn-ghost" id="authTabLogin" style="flex:1;">로그인</button>
+        <button class="btn btn-ghost" id="authTabSignup" style="flex:1;">회원가입</button>
+      </div>
+      <div style="display:flex; flex-direction:column; gap:8px;">
+        <input type="text" id="authUsername" placeholder="아이디 (2~12자)" maxlength="12"
+          style="background:rgba(0,0,0,0.25); border:1px solid rgba(184,172,138,0.25); color:var(--paper); border-radius:6px; padding:9px 10px; font-size:13px;">
+        <input type="password" id="authPassword" placeholder="비밀번호 (4자 이상)"
+          style="background:rgba(0,0,0,0.25); border:1px solid rgba(184,172,138,0.25); color:var(--paper); border-radius:6px; padding:9px 10px; font-size:13px;">
+      </div>
+      <div id="authStatus" style="font-size:11px; color:var(--paper-dim); margin-top:8px; min-height:14px;"></div>
+      <button class="btn btn-primary" id="authSubmitBtn" style="width:100%; margin-top:10px;">로그인</button>
+    </div>
+    <button class="link-btn" id="authGuestBtn">게스트로 계속하기 (기록 저장 안 됨)</button>
+  </div>
+
   <!-- START SCREEN -->
-  <div class="screen" id="startScreen">
+  <div class="screen hidden" id="startScreen">
     <div class="eyebrow">Endless Ascent</div>
     <h1>돈가스 <span>계단</span></h1>
     <div class="subtitle">방향을 정하고, 타이밍 맞춰 올라가라.<br>틀린 방향이면 추락, 시간이 다하면 게임오버.</div>
+    <div class="welcome-line hidden" id="welcomeLine"></div>
     <div class="best-badge">최고 기록 <b id="bestBadge">0</b>층</div>
     <div class="controls-card">
       <b>PC</b> — ←/→(A/D) 방향 전환 · Space/W 오르기 · P 일시정지<br>
@@ -222,6 +249,7 @@
       <button class="btn btn-ghost" id="customizeBtn">🎨 커스터마이즈</button>
       <button class="btn btn-ghost" id="settingsBtn">⚙ 설정</button>
     </div>
+    <button class="link-btn hidden" id="logoutBtn">로그아웃</button>
   </div>
 
   <!-- LEADERBOARD SCREEN -->
@@ -319,6 +347,7 @@
     <div class="go-best" id="finalBest">최고 기록 0</div>
     <div class="panel hidden" id="submitPanel" style="max-width:340px;">
       <h2>리더보드에 등록</h2>
+      <div id="submitLabel" style="font-size:12px; color:var(--brass-bright); margin-bottom:6px;"></div>
       <div style="display:flex; gap:8px;">
         <input type="text" id="nameInput" placeholder="이름" maxlength="10"
           style="flex:1; background:rgba(0,0,0,0.25); border:1px solid rgba(184,172,138,0.25); color:var(--paper); border-radius:6px; padding:8px 10px; font-size:13px;">
@@ -370,44 +399,59 @@ const CONFIG = {
    STORAGE  (persistent artifact storage — not localStorage)
 ========================================================= */
 class StorageManager{
+  // NOTE: this game is deployed standalone (GitHub Pages), not run inside a
+  // Claude artifact sandbox, so real localStorage is the correct/only choice
+  // here — window.storage doesn't exist outside the Claude.ai artifact preview.
   constructor(){
     this.defaults = { soundOn:true, vibrationOn:true, showFps:false };
   }
   async loadBest(){
-    try{
-      const r = await window.storage.get('infstairs_best', false);
-      return r ? (parseInt(r.value,10)||0) : 0;
-    }catch(e){ return 0; }
+    try{ return parseInt(localStorage.getItem('donkkas_best')||'0',10)||0; }catch(e){ return 0; }
   }
   async saveBest(v){
-    try{ await window.storage.set('infstairs_best', String(v), false); }catch(e){}
+    try{ localStorage.setItem('donkkas_best', String(v)); }catch(e){}
   }
   async loadSettings(){
     try{
-      const r = await window.storage.get('infstairs_settings', false);
-      return r ? Object.assign({}, this.defaults, JSON.parse(r.value)) : Object.assign({}, this.defaults);
+      const raw = localStorage.getItem('donkkas_settings');
+      return raw ? Object.assign({}, this.defaults, JSON.parse(raw)) : Object.assign({}, this.defaults);
     }catch(e){ return Object.assign({}, this.defaults); }
   }
   async saveSettings(s){
-    try{ await window.storage.set('infstairs_settings', JSON.stringify(s), false); }catch(e){}
+    try{ localStorage.setItem('donkkas_settings', JSON.stringify(s)); }catch(e){}
   }
-  async loadName(){
+  async loadSession(){
     try{
-      const r = await window.storage.get('infstairs_name', false);
-      return r ? r.value : '';
-    }catch(e){ return ''; }
+      const raw = localStorage.getItem('donkkas_session');
+      return raw ? JSON.parse(raw) : null;
+    }catch(e){ return null; }
   }
-  async saveName(name){
-    try{ await window.storage.set('infstairs_name', name, false); }catch(e){}
+  async saveSession(username){
+    try{ localStorage.setItem('donkkas_session', JSON.stringify({ username })); }catch(e){}
+  }
+  async clearSession(){
+    try{ localStorage.removeItem('donkkas_session'); }catch(e){}
   }
 }
 
 /* =========================================================
-   LEADERBOARD  (Google Apps Script + Sheets backend)
+   LEADERBOARD + AUTH  (Google Apps Script + Sheets backend)
 ========================================================= */
 class Leaderboard{
   constructor(url){ this.url = url; }
   get configured(){ return !!(this.url && this.url.indexOf('PASTE_YOUR') === -1); }
+  async _post(payload){
+    if(!this.configured) return { ok:false, error:'not_configured' };
+    try{
+      // text/plain avoids a CORS preflight against the Apps Script web app
+      const res = await fetch(this.url, {
+        method:'POST',
+        headers:{ 'Content-Type':'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+      return await res.json();
+    }catch(e){ return { ok:false, error:String(e) }; }
+  }
   async fetchTop(n){
     if(!this.configured) return { ok:false, error:'not_configured' };
     try{
@@ -416,16 +460,13 @@ class Leaderboard{
     }catch(e){ return { ok:false, error:String(e) }; }
   }
   async submit(name, score){
-    if(!this.configured) return { ok:false, error:'not_configured' };
-    try{
-      // text/plain avoids a CORS preflight against the Apps Script web app
-      const res = await fetch(this.url, {
-        method:'POST',
-        headers:{ 'Content-Type':'text/plain;charset=utf-8' },
-        body: JSON.stringify({ name, score })
-      });
-      return await res.json();
-    }catch(e){ return { ok:false, error:String(e) }; }
+    return this._post({ action:'submitScore', name, score });
+  }
+  async signup(username, password){
+    return this._post({ action:'signup', username, password });
+  }
+  async login(username, password){
+    return this._post({ action:'login', username, password });
   }
 }
 
@@ -664,6 +705,8 @@ class Game{
     this.input = new InputManager();
     this.leaderboard = new Leaderboard(CONFIG.LEADERBOARD_URL);
     this.playerName = '';
+    this.session = null;
+    this.authMode = 'login';
 
     this.state = 'menu'; // menu | playing | paused | gameover
     this.score = 0;
@@ -691,11 +734,109 @@ class Game{
   async _initAsync(){
     this.best = await this.storage.loadBest();
     this.settings = await this.storage.loadSettings();
-    this.playerName = await this.storage.loadName();
     this.sound.enabled = this.settings.soundOn;
     this._syncSettingsUI();
     document.getElementById('bestBadge').textContent = this.best;
+    this.setAuthMode('login');
+
+    this.session = await this.storage.loadSession();
+    if(this.session && this.session.username){
+      this.playerName = this.session.username;
+      document.getElementById('authScreen').classList.add('hidden');
+      document.getElementById('startScreen').classList.remove('hidden');
+      this._refreshAuthUI();
+    } else {
+      document.getElementById('authScreen').classList.remove('hidden');
+    }
+
     requestAnimationFrame((t)=>this._loop(t));
+  }
+
+  _refreshAuthUI(){
+    const welcome = document.getElementById('welcomeLine');
+    const logoutBtn = document.getElementById('logoutBtn');
+    if(this.session && this.session.username){
+      welcome.textContent = `${this.session.username}님, 환영해요`;
+      welcome.classList.remove('hidden');
+      logoutBtn.classList.remove('hidden');
+    } else {
+      welcome.classList.add('hidden');
+      logoutBtn.classList.add('hidden');
+    }
+  }
+
+  setAuthMode(mode){
+    this.authMode = mode;
+    document.getElementById('authTabLogin').classList.toggle('active', mode==='login');
+    document.getElementById('authTabSignup').classList.toggle('active', mode==='signup');
+    document.getElementById('authSubmitBtn').textContent = mode==='login' ? '로그인' : '회원가입';
+    document.getElementById('authStatus').textContent = '';
+  }
+
+  async handleAuthSubmit(){
+    const usernameEl = document.getElementById('authUsername');
+    const passwordEl = document.getElementById('authPassword');
+    const statusEl = document.getElementById('authStatus');
+    const submitBtn = document.getElementById('authSubmitBtn');
+
+    const username = usernameEl.value.trim();
+    const password = passwordEl.value;
+
+    if(!this.leaderboard.configured){
+      statusEl.textContent = '리더보드가 아직 설정 안 됐어. 게스트로 계속해줘.';
+      return;
+    }
+    if(username.length < 2){ statusEl.textContent = '아이디를 입력해줘.'; return; }
+    if(password.length < 4){ statusEl.textContent = '비밀번호는 4자 이상이어야 해.'; return; }
+
+    submitBtn.disabled = true;
+    statusEl.textContent = '처리 중...';
+
+    const res = this.authMode === 'login'
+      ? await this.leaderboard.login(username, password)
+      : await this.leaderboard.signup(username, password);
+
+    submitBtn.disabled = false;
+
+    if(res && res.ok){
+      this.session = { username: res.username };
+      await this.storage.saveSession(res.username);
+      this.playerName = res.username;
+      passwordEl.value = '';
+      document.getElementById('authScreen').classList.add('hidden');
+      document.getElementById('startScreen').classList.remove('hidden');
+      this._refreshAuthUI();
+      return;
+    }
+
+    const errorMap = {
+      no_such_user: '존재하지 않는 아이디야.',
+      wrong_password: '비밀번호가 틀렸어.',
+      invalid_username: '아이디는 한글/영문/숫자/밑줄 2~12자만 가능해.',
+      password_too_short: '비밀번호는 4자 이상이어야 해.',
+      username_taken: '이미 있는 아이디야.',
+      not_configured: '리더보드가 아직 설정 안 됐어.'
+    };
+    statusEl.textContent = (res && errorMap[res.error]) || '처리 중 오류가 발생했어. 다시 시도해줘.';
+  }
+
+  continueAsGuest(){
+    this.session = null;
+    this.playerName = '';
+    document.getElementById('authScreen').classList.add('hidden');
+    document.getElementById('startScreen').classList.remove('hidden');
+    this._refreshAuthUI();
+  }
+
+  async logout(){
+    this.session = null;
+    this.playerName = '';
+    await this.storage.clearSession();
+    document.getElementById('startScreen').classList.add('hidden');
+    document.getElementById('authUsername').value = '';
+    document.getElementById('authPassword').value = '';
+    document.getElementById('authStatus').textContent = '';
+    document.getElementById('authScreen').classList.remove('hidden');
   }
 
   _resize(){
@@ -714,6 +855,13 @@ class Game{
 
   _bindUI(){
     const $ = (id)=>document.getElementById(id);
+
+    $('authTabLogin').addEventListener('click', ()=>this.setAuthMode('login'));
+    $('authTabSignup').addEventListener('click', ()=>this.setAuthMode('signup'));
+    $('authSubmitBtn').addEventListener('click', ()=>this.handleAuthSubmit());
+    $('authGuestBtn').addEventListener('click', ()=>this.continueAsGuest());
+    $('authPassword').addEventListener('keydown', (e)=>{ if(e.key==='Enter') this.handleAuthSubmit(); });
+    $('logoutBtn').addEventListener('click', ()=>this.logout());
 
     $('startBtn').addEventListener('click', ()=>this.startGame());
     $('customizeBtn').addEventListener('click', ()=>{ $('startScreen').classList.add('hidden'); $('customizePanel').classList.remove('hidden'); });
@@ -935,13 +1083,21 @@ class Game{
 
       const submitPanel = document.getElementById('submitPanel');
       const nameInput = document.getElementById('nameInput');
+      const submitLabel = document.getElementById('submitLabel');
       const submitBtn = document.getElementById('submitScoreBtn');
       const status = document.getElementById('submitStatus');
       if(this.leaderboard.configured){
         submitPanel.classList.remove('hidden');
-        nameInput.value = this.playerName || '';
         submitBtn.disabled = false; submitBtn.textContent = '등록';
         status.textContent = '';
+        if(this.session && this.session.username){
+          nameInput.classList.add('hidden');
+          submitLabel.textContent = `"${this.session.username}" 이름으로 등록돼요`;
+        } else {
+          nameInput.classList.remove('hidden');
+          nameInput.value = '';
+          submitLabel.textContent = '';
+        }
       } else {
         submitPanel.classList.add('hidden');
       }
@@ -972,9 +1128,9 @@ class Game{
     const nameInput = document.getElementById('nameInput');
     const submitBtn = document.getElementById('submitScoreBtn');
     const status = document.getElementById('submitStatus');
-    const name = (nameInput.value||'').trim().slice(0,10) || '익명';
-    this.playerName = name;
-    this.storage.saveName(name);
+    const name = (this.session && this.session.username)
+      ? this.session.username
+      : ((nameInput.value||'').trim().slice(0,10) || '익명');
     submitBtn.disabled = true; submitBtn.textContent = '등록 중...';
     status.textContent = '';
     const res = await this.leaderboard.submit(name, this.score);
