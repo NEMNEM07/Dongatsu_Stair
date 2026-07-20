@@ -189,6 +189,7 @@
 
   /* Game over */
   #gameOverScreen{ z-index:30; background:rgba(4,10,7,0.85); }
+  #blockScreen{ z-index:40; }
   .go-title{ font-size:14px; letter-spacing:0.3em; color:var(--ruby); text-transform:uppercase; margin-bottom:4px;}
   .go-score{ font-size:56px; font-weight:800; color:var(--brass-bright); text-shadow:0 0 20px rgba(201,162,39,0.5); }
   .go-record{ font-size:13px; color:var(--emerald); margin-top:6px; font-weight:700; }
@@ -786,6 +787,8 @@ class Game{
     requestAnimationFrame((t)=>this._loop(t));
 
     const blocked = await this._checkGate();
+    this._startGateWatcher(); // keep polling for the rest of the session, blocked or not
+
     if(blocked) return;
 
     this.session = await this.storage.loadSession();
@@ -799,9 +802,41 @@ class Game{
     }
   }
 
+  _setBlockContent(eyebrow, title, message){
+    document.getElementById('blockEyebrow').textContent = eyebrow;
+    document.getElementById('blockTitle').textContent = title;
+    document.getElementById('blockMessage').textContent = message;
+  }
+
+  // Slams the block screen over whatever is currently happening — including
+  // an in-progress climb — so maintenance mode takes effect immediately
+  // instead of waiting for the player to reload or finish their run.
+  _showBlockScreen(){
+    ['gateScreen','authScreen','startScreen','customizePanel','settingsPanel',
+     'leaderboardPanel','gameOverScreen','pauseOverlay','hud','hudIcons',
+     'dirIndicator','controls'].forEach(id=>{
+      const el = document.getElementById(id);
+      if(el) el.classList.add('hidden');
+    });
+    document.getElementById('blockScreen').classList.remove('hidden');
+    this.state = 'menu'; // halts _update()/_render() game logic; menu background renders instead
+    this._stopLeaderboardPolling();
+  }
+
+  _blockReasonFromStatus_(res){
+    if(res.maintenance){
+      return { eyebrow:'Maintenance', title:'점검 중이에요',
+        message: res.message || '더 좋은 모습으로 곧 돌아올게요. 잠시 후 다시 접속해줘.' };
+    }
+    if(res.requiredVersion && res.requiredVersion !== CONFIG.GAME_VERSION){
+      return { eyebrow:'Update Required', title:'업데이트가 필요해요',
+        message:`새 버전(${res.requiredVersion})이 있어. 페이지를 새로고침(강력 새로고침: Ctrl+Shift+R)해줘. 현재 버전: ${CONFIG.GAME_VERSION}` };
+    }
+    return null;
+  }
+
   async _checkGate(){
     const gate = document.getElementById('gateScreen');
-    const block = document.getElementById('blockScreen');
 
     if(!this.leaderboard.configured){
       // no backend wired up yet — don't lock the game during setup/testing
@@ -818,28 +853,37 @@ class Game{
       return false;
     }
 
-    if(res.maintenance){
+    const reason = this._blockReasonFromStatus_(res);
+    if(reason){
       gate.classList.add('hidden');
-      document.getElementById('blockEyebrow').textContent = 'Maintenance';
-      document.getElementById('blockTitle').textContent = '점검 중이에요';
-      document.getElementById('blockMessage').textContent =
-        res.message || '더 좋은 모습으로 곧 돌아올게요. 잠시 후 다시 접속해줘.';
-      block.classList.remove('hidden');
-      return true;
-    }
-
-    if(res.requiredVersion && res.requiredVersion !== CONFIG.GAME_VERSION){
-      gate.classList.add('hidden');
-      document.getElementById('blockEyebrow').textContent = 'Update Required';
-      document.getElementById('blockTitle').textContent = '업데이트가 필요해요';
-      document.getElementById('blockMessage').textContent =
-        `새 버전(${res.requiredVersion})이 있어. 페이지를 새로고침(강력 새로고침: Ctrl+Shift+R)해줘. 현재 버전: ${CONFIG.GAME_VERSION}`;
-      block.classList.remove('hidden');
+      this._setBlockContent(reason.eyebrow, reason.title, reason.message);
+      document.getElementById('blockScreen').classList.remove('hidden');
       return true;
     }
 
     gate.classList.add('hidden');
     return false;
+  }
+
+  // Runs for the whole session (not just at load) so a maintenance toggle or
+  // version bump reaches everyone within one poll interval, even people
+  // mid-climb. Also auto-releases the block screen if maintenance ends while
+  // someone's sitting on it.
+  _startGateWatcher(){
+    if(this._gateInterval || !this.leaderboard.configured) return;
+    this._gateInterval = setInterval(async ()=>{
+      const res = await this.leaderboard.checkStatus();
+      if(!res || !res.ok) return;
+      const isBlocked = !document.getElementById('blockScreen').classList.contains('hidden');
+      const reason = this._blockReasonFromStatus_(res);
+
+      if(reason && !isBlocked){
+        this._setBlockContent(reason.eyebrow, reason.title, reason.message);
+        this._showBlockScreen();
+      } else if(!reason && isBlocked){
+        location.reload(); // maintenance lifted while someone was waiting — just reset clean
+      }
+    }, 8000);
   }
 
   _refreshAuthUI(){
